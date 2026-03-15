@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, List
 
 import requests
 
@@ -68,8 +68,6 @@ class GymClient:
             data: Dict[str, Any] = response.json()
         except ValueError as exc:
             raise GymClientError("Login response is not valid JSON") from exc
-
-        print("JSON login:", data)
         if not data.get("Successful"):
             message = data.get("ErrorMessage") or data.get("Comment") or "Unknown error"
             raise GymClientError(f"Login not successful: {message}")
@@ -81,13 +79,8 @@ class GymClient:
         self._token = item
 
         # Attach tokens as headers / cookies for subsequent requests.
-        self.session.headers.update({"Authtoken": item})
-
-        app_token = get_app_token()
-        if app_token:
-            self.session.headers.update({"Apptoken": app_token})
-            # Also set cookie; some endpoints might read it from there.
-            self.session.cookies.set("app-token", app_token)
+        # Use the same header name seen in browser traffic.
+        self.session.headers.update({"AuthToken": item})
 
         # Company cookie sometimes used by backend
         self.session.cookies.set("company", str(COMPANY_ID))
@@ -118,3 +111,89 @@ class GymClient:
 
         return data
 
+    def list_with_mine(
+        self,
+        start_date: str,
+        end_date: str,
+        time_start: str,
+        time_end: str,
+        types: List[int] | None = None,
+    ) -> Dict[str, Any]:
+        """
+        Retrieve lessons (classes) between two dates and times.
+
+        All parameters are string timestamps in the same format used by the API,
+        e.g. "2026-03-14T00:00:00".
+        """
+        url = f"{BASE_URL}/webbooking/listwithmine"
+        payload: Dict[str, Any] = {
+            "CompanyID": COMPANY_ID,
+            "Types": types or [],
+            "StartDate": start_date,
+            "EndDate": end_date,
+            "TimeStart": time_start,
+            "TimeEnd": time_end,
+        }
+
+        try:
+            response = self.session.post(url, json=payload, timeout=10)
+        except requests.RequestException as exc:
+            raise GymClientError(f"listwithmine request failed: {exc}") from exc
+
+        if not response.ok:
+            raise GymClientError(
+                f"listwithmine failed with HTTP {response.status_code}: {response.text}"
+            )
+
+        try:
+            data: Dict[str, Any] = response.json()
+        except ValueError as exc:
+            raise GymClientError("listwithmine response is not valid JSON") from exc
+
+        return data
+
+    def book(
+        self,
+        booking_id: int,
+        start_time: str,
+        end_time: str,
+        lesson_id: int,
+        type_: int = 0,
+        note: str = "",
+        book_nr: int = 0,
+        id_durata: int = 0,
+    ) -> Dict[str, Any]:
+        """
+        Book a specific lesson.
+
+        All timestamps are strings in the format used by the API,
+        e.g. "2026-03-23T20:00:00".
+        """
+        url = f"{BASE_URL}/webbooking/book"
+        payload = {
+            "Note": note,
+            "BookNr": book_nr,
+            "BookingID": booking_id,
+            "StartTime": start_time,
+            "EndTime": end_time,
+            "IDLesson": lesson_id,
+            "Type": type_,
+            "IDDurata": id_durata,
+        }
+
+        try:
+            response = self.session.post(url, json=payload, timeout=10)
+        except requests.RequestException as exc:
+            raise GymClientError(f"book request failed: {exc}") from exc
+
+        if not response.ok:
+            raise GymClientError(
+                f"book failed with HTTP {response.status_code}: {response.text}"
+            )
+
+        try:
+            data: Dict[str, Any] = response.json()
+        except ValueError as exc:
+            raise GymClientError("book response is not valid JSON") from exc
+
+        return data
