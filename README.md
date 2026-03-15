@@ -94,6 +94,13 @@ cd C:\projects\gym-bot\src
 python -m gym_bot.cli
 ```
 
+To automatically book the first available lesson on the 20th day that matches your preferences:
+
+```powershell
+cd C:\projects\gym-bot\src
+python -m gym_bot.cli --book
+```
+
 The script performs the following steps:
 
 1. Loads variables from `.env` if available
@@ -102,6 +109,7 @@ The script performs the following steps:
 4. Calls the lessons endpoint (`/webbooking/listwithmine`) for the next 20 days (including today)
 5. Applies filters defined in the `courses.yaml` file based on day of the week and course keywords
 6. Prints to screen the lessons that match preferences, with date, time, description, and available spots
+7. If `--book` is used, attempts to book the earliest available lesson on the 20th day
 
 If something goes wrong (e.g., missing or incorrect credentials), the program terminates with an error message and a non-zero exit code.
 
@@ -131,6 +139,35 @@ Notes:
 - Day names must be in English, lowercase (`monday`, `tuesday`, …).
 - Strings in the list are keywords compared case-insensitively with the `ServiceDescription` field of lessons.
 - You can specify multiple courses for the same day (just add more entries in the list).
+
+## GitHub Actions Automation
+
+The project includes a GitHub Actions workflow (`.github/workflows/book.yml`) that runs daily at 7:05 AM UTC to automatically book gym lessons. It uses the `--book` flag to attempt booking the first available lesson on the 20th day matching your `courses.yaml` preferences.
+
+### Setup
+
+1. Ensure GitHub Secrets are configured in your repository:
+   - `GYM_USERNAME`: Your gym portal username
+   - `GYM_PASSWORD`: Your gym portal password
+   - `GYM_APP_TOKEN`: Optional app token (uses default if not set)
+
+2. The workflow will run automatically every day. You can also trigger it manually from the Actions tab.
+
+### Testing
+
+To test locally without booking:
+
+```powershell
+cd C:\projects\gym-bot\src
+python -m gym_bot.cli
+```
+
+To test booking (use with caution):
+
+```powershell
+cd C:\projects\gym-bot\src
+python -m gym_bot.cli --book
+```
 
 ## Project Structure
 

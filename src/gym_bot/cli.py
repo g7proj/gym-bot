@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 import sys
 from datetime import date, datetime, time, timedelta
 from typing import Any, Dict, List
@@ -21,7 +22,7 @@ def _print_lessons(lessons: List[Dict[str, Any]]) -> None:
     for item in lessons:
         date_lesson_str = item.get("DateLesson")
         start_time_str = item.get("StartTime")
-        service = item.get("ServiceDescription", "<sconosciuto>")
+        service = item.get("ServiceDescription", "<unknown>")
         category = item.get("CategoryDescription", "")
         available = item.get("AvailablePlaces")
 
@@ -75,6 +76,14 @@ def _filter_lessons_by_preferences(
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser(description="Gym bot CLI for listing and booking lessons.")
+    parser.add_argument(
+        "--book",
+        action="store_true",
+        help="Automatically book the first available lesson on the 20th day that matches preferences.",
+    )
+    args = parser.parse_args()
+
     # Load .env if available (for local development convenience)
     if load_dotenv is not None:
         load_dotenv()
@@ -95,10 +104,10 @@ def main() -> None:
 
     print("Login successful.")
 
-    # Calcola l'intervallo di 20 giorni: oggi incluso fino a oggi+19.
+    # Calculate the 20-day window: today to today+19.
     start_dt, end_dt = schedule.get_booking_window()
 
-    # Fascia oraria giornaliera (circa 7-24)
+    # Daily time window (approx 7-24)
     time_start_dt, time_end_dt = schedule.get_daily_time_window()
 
     start_date_str = start_dt.isoformat(timespec="seconds")
@@ -134,6 +143,50 @@ def main() -> None:
     )
 
     _print_lessons(filtered_lessons)
+
+    if args.book:
+        # Find the 20th day (end of the booking window)
+        twentieth_day = end_dt.date()
+
+        # Filter available lessons on the 20th day
+        available_lessons = [
+            item
+            for item in filtered_lessons
+            if item.get("AvailablePlaces", 0) > 0
+            and schedule.parse_api_date(item.get("DateLesson")) == twentieth_day
+        ]
+
+        if not available_lessons:
+            print("No available lessons on the 20th day matching preferences.")
+            return
+
+        # Sort by start time (earliest first)
+        available_lessons.sort(key=lambda x: schedule.parse_api_time(x.get("StartTime")) or time.min)
+        first_lesson = available_lessons[0]
+
+        # Attempt to book the lesson
+        try:
+            # Construct full datetime strings for start and end times
+            lesson_date = schedule.parse_api_date(first_lesson["DateLesson"])
+            start_time_obj = schedule.parse_api_time(first_lesson["StartTime"])
+            end_time_obj = schedule.parse_api_time(first_lesson["EndTime"])
+            start_datetime = datetime.combine(lesson_date, start_time_obj)
+            end_datetime = datetime.combine(lesson_date, end_time_obj)
+            start_time_str = start_datetime.isoformat(timespec="seconds")
+            end_time_str = end_datetime.isoformat(timespec="seconds")
+
+            book_response = client.book(
+                booking_id=first_lesson["IDServizio"],
+                start_time=start_time_str,
+                end_time=end_time_str,
+                lesson_id=first_lesson["IDLesson"],
+            )
+            if book_response.get("Successful"):
+                print("Booking successful.")
+            else:
+                print("Booking failed.")
+        except GymClientError as exc:
+            print(f"Booking failed: {exc}")
 
 
 if __name__ == "__main__":
