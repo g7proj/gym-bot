@@ -152,6 +152,36 @@ class GymClient:
 
         return data
 
+    def my_books(self, type_: str | None = "") -> Dict[str, Any]:
+        """
+        Retrieve current bookings for the authenticated user.
+
+        The type_ parameter maps to the 'Type' query parameter. By default,
+        an empty string is sent, matching the browser behaviour (all types).
+        """
+        url = f"{BASE_URL}/webbooking/mybooks"
+        params = {
+            "companyID": COMPANY_ID,
+            "Type": type_ or "",
+        }
+
+        try:
+            response = self.session.get(url, params=params, timeout=10)
+        except requests.RequestException as exc:
+            raise GymClientError(f"mybooks request failed: {exc}") from exc
+
+        if not response.ok:
+            raise GymClientError(
+                f"mybooks failed with HTTP {response.status_code}: {response.text}"
+            )
+
+        try:
+            data: Dict[str, Any] = response.json()
+        except ValueError as exc:
+            raise GymClientError("mybooks response is not valid JSON") from exc
+
+        return data
+
     def book(
         self,
         booking_id: int,
