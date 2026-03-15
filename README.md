@@ -91,10 +91,48 @@ Lo script esegue i seguenti passi:
 1. Carica eventuali variabili da `.env`
 2. Legge `GYM_USERNAME` e `GYM_PASSWORD`
 3. Chiama l’endpoint di login del portale e ottiene il token
-4. Chiama l’endpoint dei servizi (`/webbooking/services`) usando token, header e cookie necessari
-5. Stampa a schermo l’elenco delle categorie di corsi e quante tipologie contiene ciascuna
+4. Chiama l’endpoint delle lezioni (`/webbooking/listwithmine`) per i prossimi 20 giorni (oggi incluso)
+5. Applica i filtri definiti nel file `courses.yaml` in base al giorno della settimana e alle parole chiave dei corsi
+6. Stampa a schermo le lezioni che rispettano le preferenze, con data, orario, descrizione e posti liberi
 
 Se qualcosa va storto (es. credenziali mancanti o errate), il programma termina con un messaggio di errore e un exit code diverso da zero.
+
+## Configurazione corsi (`courses.yaml`)
+
+Per indicare i corsi che ti interessano in base al giorno della settimana, usa il file `courses.yaml` nella root del progetto.
+
+Esempio:
+
+```yaml
+monday:
+  - "yoga"
+tuesday:
+  - "weightlifting"
+wednesday:
+  - "weightlifting"
+thursday:
+  - "weightlifting"
+friday:
+  - "weightlifting"
+saturday:
+  - "yoga"
+```
+
+Note:
+
+- I nomi dei giorni devono essere in inglese, minuscoli (`monday`, `tuesday`, …).
+- Le stringhe nella lista sono parole chiave confrontate in modo case-insensitive con il campo `ServiceDescription` delle lezioni.
+- Puoi indicare più corsi per lo stesso giorno (basta aggiungere più voci nella lista).
+
+## Struttura dei moduli
+
+La logica del progetto è suddivisa in:
+
+- `gym_bot/client.py`: gestisce tutte le chiamate HTTP (login, elenco servizi, elenco lezioni, prenotazioni).
+- `gym_bot/config.py`: valori di configurazione e lettura delle credenziali/token da variabili d’ambiente.
+- `gym_bot/schedule.py`: funzioni per lavorare con le date/orari e per filtrare le lezioni in base alle preferenze settimanali.
+- `gym_bot/courses_config.py`: lettura e normalizzazione del file `courses.yaml`.
+- `gym_bot/cli.py`: entrypoint da terminale che orchestra le chiamate ai moduli precedenti e stampa l’output.
 
 ## Note di sicurezza
 
