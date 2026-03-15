@@ -1,107 +1,115 @@
 # gym-bot
 
-Automazione personale per la prenotazione dei corsi in palestra tramite API `inforyou.teamsystem.com`, scritta in Python.
+Personal automation for checking available gym courses via the `inforyou.teamsystem.com` API, written in Python.
 
-## Requisiti
+## Features
 
-- Python 3.11+ installato e disponibile nel `PATH`
-- Accesso al portale palestra (username e password validi)
-- Connessione internet
+- Authenticate with the gym portal using username and password
+- Retrieve available lessons for the next 20 days
+- Filter lessons based on day of the week and course keywords defined in `courses.yaml`
+- Display lesson details including date, time, description, and available spots
+- Support for environment variables and `.env` file for credentials
 
-## Setup ambiente locale (Windows / PowerShell)
+## Requirements
 
-Tutti i comandi sono da eseguire nella root del progetto, ad esempio:
+- Python 3.11+ installed and available in `PATH`
+- Valid access to the gym portal (username and password)
+- Internet connection
+
+## Local Environment Setup (Windows / PowerShell)
+
+All commands should be run from the project root, for example:
 
 ```powershell
 cd C:\projects\gym-bot
 ```
 
-### 1. Creazione e attivazione virtualenv
+### 1. Create and Activate Virtual Environment
 
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 ```
 
-Se l’attivazione dello script è bloccata da policy di esecuzione, puoi temporaneamente abilitarla con:
+If script execution is blocked by execution policy, you can temporarily enable it with:
 
 ```powershell
 Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 ```
 
-e poi riprovare ad attivare il virtualenv.
+Then retry activating the virtual environment.
 
-### 2. Installazione delle dipendenze
+### 2. Install Dependencies
 
-Con l’ambiente virtuale attivo:
+With the virtual environment active:
 
 ```powershell
 pip install -r requirements.txt
 ```
 
-Questo installerà:
+This will install:
 
-- `requests` per le chiamate HTTP verso l’API
-- `python-dotenv` per caricare eventuali variabili da `.env`
-- `PyYAML` (verrà usato più avanti per la configurazione corsi)
+- `requests` for HTTP calls to the API
+- `python-dotenv` for loading variables from `.env`
+- `PyYAML` (used for course configuration)
 
-### 3. Configurazione credenziali e token
+### 3. Configure Credentials and Token
 
-Lo script legge le credenziali e i token da variabili d’ambiente:
+The script reads credentials and tokens from environment variables:
 
-- `GYM_USERNAME` – username del portale
-- `GYM_PASSWORD` – password del portale
-- `GYM_APP_TOKEN` – opzionale; se non impostata viene usato un valore di default osservato dal portale
+- `GYM_USERNAME` – portal username
+- `GYM_PASSWORD` – portal password
+- `GYM_APP_TOKEN` – optional; if not set, a default value observed from the portal is used
 
-Per impostarle nella sessione corrente di PowerShell:
-
-```powershell
-$env:GYM_USERNAME = "il_tuo_username"
-$env:GYM_PASSWORD = "la_tua_password"
-```
-
-`GYM_APP_TOKEN` ha già un **valore di default** integrato nel codice (`DEFAULT_APP_TOKEN` in `gym_bot/config.py`).  
-Se vuoi sovrascriverlo (ad esempio se la palestra cambia token), puoi impostarlo così:
+To set them in the current PowerShell session:
 
 ```powershell
-$env:GYM_APP_TOKEN = "VALORE_APP_TOKEN_DAL_PORTALE"
+$env:GYM_USERNAME = "your_username"
+$env:GYM_PASSWORD = "your_password"
 ```
 
-In alternativa, puoi creare un file `.env` nella root del progetto con il seguente contenuto (usato solo in locale):
+`GYM_APP_TOKEN` has a **default value** integrated in the code (`DEFAULT_APP_TOKEN` in `gym_bot/config.py`).
+If you want to override it (e.g., if the gym changes the token), you can set it like this:
+
+```powershell
+$env:GYM_APP_TOKEN = "APP_TOKEN_VALUE_FROM_PORTAL"
+```
+
+Alternatively, you can create a `.env` file in the project root with the following content (used only locally):
 
 ```env
-GYM_USERNAME=il_tuo_username
-GYM_PASSWORD=la_tua_password
-# GYM_APP_TOKEN=VALORE_APP_TOKEN_DAL_PORTALE  # opzionale
+GYM_USERNAME=your_username
+GYM_PASSWORD=your_password
+# GYM_APP_TOKEN=APP_TOKEN_VALUE_FROM_PORTAL  # optional
 ```
 
-`python-dotenv` verrà caricato automaticamente da `gym_bot.cli` (se installato).
+`python-dotenv` will be loaded automatically by `gym_bot.cli` (if installed).
 
-## Esecuzione della CLI
+## Running the CLI
 
-Con il virtualenv attivo e le variabili d’ambiente impostate:
+With the virtual environment active and environment variables set:
 
 ```powershell
 cd C:\projects\gym-bot\src
 python -m gym_bot.cli
 ```
 
-Lo script esegue i seguenti passi:
+The script performs the following steps:
 
-1. Carica eventuali variabili da `.env`
-2. Legge `GYM_USERNAME` e `GYM_PASSWORD`
-3. Chiama l’endpoint di login del portale e ottiene il token
-4. Chiama l’endpoint delle lezioni (`/webbooking/listwithmine`) per i prossimi 20 giorni (oggi incluso)
-5. Applica i filtri definiti nel file `courses.yaml` in base al giorno della settimana e alle parole chiave dei corsi
-6. Stampa a schermo le lezioni che rispettano le preferenze, con data, orario, descrizione e posti liberi
+1. Loads variables from `.env` if available
+2. Reads `GYM_USERNAME` and `GYM_PASSWORD`
+3. Calls the portal login endpoint and obtains the token
+4. Calls the lessons endpoint (`/webbooking/listwithmine`) for the next 20 days (including today)
+5. Applies filters defined in the `courses.yaml` file based on day of the week and course keywords
+6. Prints to screen the lessons that match preferences, with date, time, description, and available spots
 
-Se qualcosa va storto (es. credenziali mancanti o errate), il programma termina con un messaggio di errore e un exit code diverso da zero.
+If something goes wrong (e.g., missing or incorrect credentials), the program terminates with an error message and a non-zero exit code.
 
-## Configurazione corsi (`courses.yaml`)
+## Course Configuration (`courses.yaml`)
 
-Per indicare i corsi che ti interessano in base al giorno della settimana, usa il file `courses.yaml` nella root del progetto.
+To specify the courses you are interested in based on the day of the week, use the `courses.yaml` file in the project root.
 
-Esempio:
+Example:
 
 ```yaml
 monday:
@@ -118,23 +126,23 @@ saturday:
   - "yoga"
 ```
 
-Note:
+Notes:
 
-- I nomi dei giorni devono essere in inglese, minuscoli (`monday`, `tuesday`, …).
-- Le stringhe nella lista sono parole chiave confrontate in modo case-insensitive con il campo `ServiceDescription` delle lezioni.
-- Puoi indicare più corsi per lo stesso giorno (basta aggiungere più voci nella lista).
+- Day names must be in English, lowercase (`monday`, `tuesday`, …).
+- Strings in the list are keywords compared case-insensitively with the `ServiceDescription` field of lessons.
+- You can specify multiple courses for the same day (just add more entries in the list).
 
-## Struttura dei moduli
+## Project Structure
 
-La logica del progetto è suddivisa in:
+The project logic is divided into:
 
-- `gym_bot/client.py`: gestisce tutte le chiamate HTTP (login, elenco servizi, elenco lezioni, prenotazioni).
-- `gym_bot/config.py`: valori di configurazione e lettura delle credenziali/token da variabili d’ambiente.
-- `gym_bot/schedule.py`: funzioni per lavorare con le date/orari e per filtrare le lezioni in base alle preferenze settimanali.
-- `gym_bot/courses_config.py`: lettura e normalizzazione del file `courses.yaml`.
-- `gym_bot/cli.py`: entrypoint da terminale che orchestra le chiamate ai moduli precedenti e stampa l’output.
+- `gym_bot/client.py`: handles all HTTP calls (login, service list, lesson list, bookings).
+- `gym_bot/config.py`: configuration values and reading credentials/tokens from environment variables.
+- `gym_bot/schedule.py`: functions for working with dates/times and filtering lessons based on weekly preferences.
+- `gym_bot/courses_config.py`: reading and normalizing the `courses.yaml` file.
+- `gym_bot/cli.py`: terminal entrypoint that orchestrates calls to the previous modules and prints output.
 
-## Note di sicurezza
+## Security Notes
 
-- **Non** committare mai le credenziali reali nel repository.
-- Usa sempre variabili d’ambiente o un file `.env` non tracciato (già escluso da `.gitignore`).
+- **Never** commit real credentials to the repository.
+- Always use environment variables or a non-tracked `.env` file (already excluded by `.gitignore`).
