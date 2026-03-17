@@ -8,7 +8,8 @@ import uuid
 from .models import User, UserCredentials, UserPreferences
 from .storage import UserStorage
 from utils.crypto import CryptoUtils
-from src.gym_bot.client import GymClient, GymClientError  # Import existing GymClient
+from src.gym_bot.client import GymClient, GymClientError
+from src.gym_bot.config import Credentials
 
 app = FastAPI(title="Gym Booking API", version="1.0.0")
 
@@ -38,11 +39,16 @@ async def login(credentials: UserCredentials):
     Raises:
         HTTPException: If login fails.
     """
-    client = GymClient()
     try:
         # Decrypt password for login attempt
         password = crypto.decrypt(credentials.password_encrypted)
-        client.login({"username": credentials.username, "password": password})
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Decryption failed: {e}")
+    
+    client = GymClient()
+    try:
+        creds = Credentials(username=credentials.username, password=password)
+        client.login(creds)
     except GymClientError as e:
         raise HTTPException(status_code=401, detail=f"Login failed: {e}")
     

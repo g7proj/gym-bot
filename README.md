@@ -199,6 +199,55 @@ The system supports multiple users with a REST API for registration and preferen
 - `PUT /users/{user_id}/preferences`: Update course preferences.
 - `GET /users/{user_id}`: Get user data.
 
+### Local Testing
+
+To test the multi-user API locally:
+
+1. **Set Environment Variables**:
+   ```powershell
+   $env:ENCRYPTION_KEY = "your_generated_key_here"
+   ```
+
+2. **Start the Server**:
+   ```powershell
+   cd C:\projects\gym-bot
+   $env:PYTHONPATH = "."
+   uvicorn api.main:app --reload
+   ```
+   Visit `http://127.0.0.1:8000/docs` for interactive API docs.
+
+3. **Test Login Endpoint** (using PowerShell Invoke-WebRequest):
+   - Encrypt your password first:
+     ```python
+     from utils.crypto import CryptoUtils
+     crypto = CryptoUtils()
+     encrypted_pw = crypto.encrypt("your_password")
+     print(encrypted_pw)
+     ```
+   - Then login:
+     ```powershell
+     Invoke-WebRequest -Uri "http://127.0.0.1:8000/login" `
+                      -Method POST `
+                      -Headers @{ "Content-Type" = "application/json" } `
+                      -Body '{"username": "your_username", "password_encrypted": "encrypted_pw_here"}'
+     ```
+     Expected response: `{"message": "Login successful", "user_id": "uuid"}`
+
+4. **Test Preferences Update**:
+   ```powershell
+   Invoke-WebRequest -Uri "http://127.0.0.1:8000/users/your_user_id/preferences" `
+                    -Method PUT `
+                    -Headers @{ "Content-Type" = "application/json" } `
+                    -Body '{"monday": ["yoga"], "tuesday": ["weightlifting"]}'
+   ```
+
+5. **Test User Retrieval**:
+   ```powershell
+   Invoke-WebRequest -Uri "http://127.0.0.1:8000/users/your_user_id"
+   ```
+
+For frontend testing, use a tool like Postman or implement the React app in `web/`. The API supports CORS for local development.
+
 ### Frontend (React)
 
 A React SPA is planned for user-friendly login and preference setting. Place React code in `web/` directory.
