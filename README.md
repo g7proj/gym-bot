@@ -9,6 +9,7 @@ Personal automation for checking available gym courses via the `inforyou.teamsys
 - Filter lessons based on day of the week and course keywords defined in `courses.yaml`
 - Display lesson details including date, time, description, and available spots
 - Support for environment variables and `.env` file for credentials
+- Multi-user support with encrypted storage and web interface (React + FastAPI)
 
 ## Requirements
 
@@ -168,6 +169,39 @@ To test booking (use with caution):
 cd C:\projects\gym-bot\src
 python -m gym_bot.cli --book
 ```
+
+## Multi-User API (FastAPI Backend)
+
+The system supports multiple users with a REST API for registration and preference management.
+
+### Setup
+
+1. Install additional dependencies:
+   ```powershell
+   pip install -r requirements.txt
+   ```
+
+2. Generate encryption key for passwords:
+   ```python
+   from cryptography.fernet import Fernet
+   print(Fernet.generate_key().decode())
+   ```
+   Add the output as `ENCRYPTION_KEY` in GitHub Secrets.
+
+3. Run the API server:
+   ```powershell
+   uvicorn api.main:app --reload
+   ```
+
+### API Endpoints
+
+- `POST /login`: Verify credentials and create user account.
+- `PUT /users/{user_id}/preferences`: Update course preferences.
+- `GET /users/{user_id}`: Get user data.
+
+### Frontend (React)
+
+A React SPA is planned for user-friendly login and preference setting. Place React code in `web/` directory.
 
 ## Project Structure
 
