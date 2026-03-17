@@ -10,6 +10,7 @@ Personal automation for checking available gym courses via the `inforyou.teamsys
 - Display lesson details including date, time, description, and available spots
 - Support for environment variables and `.env` file for credentials
 - Multi-user support with encrypted storage and web interface (React + FastAPI)
+- Per-day course preferences (multiple courses per weekday)
 
 ## Requirements
 
@@ -57,7 +58,7 @@ cd web
 npm install
 ```
 
-Create a `.env` file in the `web` directory with your API URL:
+Create a `.env` file in the `web` directory with your API URL (do not put encryption keys in the frontend):
 
 ```
 REACT_APP_API_URL=http://localhost:8000
@@ -96,7 +97,7 @@ python -m gym_bot.cli
 
 ### GitHub Actions
 
-The project includes a GitHub Actions workflow for automated daily booking. The workflow runs daily at 6 AM UTC and books courses based on user preferences stored in `data/users.json`.
+The project includes a GitHub Actions workflow for automated daily booking. The workflow runs daily at 6:05 AM UTC and books courses based on user preferences stored in `data/users.json`.
 
 To set up automated booking:
 
@@ -106,9 +107,9 @@ To set up automated booking:
 
 ## API Endpoints
 
-- `POST /login`: Authenticate user and return user ID
+- `POST /login`: Authenticate user and return user ID (reuses existing account by username and updates password)
 - `GET /users/{user_id}`: Get user data
-- `PUT /users/{user_id}/preferences`: Update user preferences
+- `PUT /users/{user_id}/preferences`: Update user preferences (overwrites previous preferences)
 - `GET /users`: List all users (for admin purposes)
 
 ## Security
@@ -203,6 +204,26 @@ The script performs the following steps:
 
 If something goes wrong (e.g., missing or incorrect credentials), the program terminates with an error message and a non-zero exit code.
 
+## Course Preferences Format
+
+Both CLI and API use the same preferences structure: a mapping of weekday to a list of course keywords.
+
+Example payload for the API:
+
+```json
+{
+  "by_day": {
+    "monday": ["yoga", "pilates"],
+    "wednesday": ["weightlifting"]
+  }
+}
+```
+
+Notes:
+- Day names must be in English, lowercase (`monday`, `tuesday`, ...).
+- Keywords are matched case-insensitively against `ServiceDescription`.
+- Each day can have multiple courses.
+
 ## Course Configuration (`courses.yaml`)
 
 To specify the courses you are interested in based on the day of the week, use the `courses.yaml` file in the project root.
@@ -237,9 +258,7 @@ The project includes a GitHub Actions workflow (`.github/workflows/book.yml`) th
 ### Setup
 
 1. Ensure GitHub Secrets are configured in your repository:
-   - `GYM_USERNAME`: Your gym portal username
-   - `GYM_PASSWORD`: Your gym portal password
-   - `GYM_APP_TOKEN`: Optional app token (uses default if not set)
+   - `ENCRYPTION_KEY`: Fernet key used to decrypt stored passwords
 
 2. The workflow will run automatically every day. You can also trigger it manually from the Actions tab.
 
@@ -275,7 +294,7 @@ The system supports multiple users with a REST API for registration and preferen
    from cryptography.fernet import Fernet
    print(Fernet.generate_key().decode())
    ```
-   Add the output as `ENCRYPTION_KEY` in GitHub Secrets.
+   Add the output as `ENCRYPTION_KEY` in GitHub Secrets (and in Render if deploying the API).
 
 3. Run the API server:
    ```powershell
@@ -306,19 +325,12 @@ To test the multi-user API locally:
    Visit `http://127.0.0.1:8000/docs` for interactive API docs.
 
 3. **Test Login Endpoint** (using PowerShell Invoke-WebRequest):
-   - Encrypt your password first:
-     ```python
-     from utils.crypto import CryptoUtils
-     crypto = CryptoUtils()
-     encrypted_pw = crypto.encrypt("your_password")
-     print(encrypted_pw)
-     ```
-   - Then login:
+   - Login (password is sent in plain text over HTTPS and encrypted server-side):
      ```powershell
      Invoke-WebRequest -Uri "http://127.0.0.1:8000/login" `
                       -Method POST `
                       -Headers @{ "Content-Type" = "application/json" } `
-                      -Body '{"username": "your_username", "password_encrypted": "encrypted_pw_here"}'
+                      -Body '{"username": "your_username", "password": "your_password"}'
      ```
      Expected response: `{"message": "Login successful", "user_id": "uuid"}`
 
@@ -327,7 +339,7 @@ To test the multi-user API locally:
    Invoke-WebRequest -Uri "http://127.0.0.1:8000/users/your_user_id/preferences" `
                     -Method PUT `
                     -Headers @{ "Content-Type" = "application/json" } `
-                    -Body '{"monday": ["yoga"], "tuesday": ["weightlifting"]}'
+                    -Body '{"by_day": {"monday": ["yoga"], "tuesday": ["weightlifting"]}}'
    ```
 
 5. **Test User Retrieval**:
@@ -339,7 +351,28 @@ For frontend testing, use a tool like Postman or implement the React app in `web
 
 ### Frontend (React)
 
-A React SPA is planned for user-friendly login and preference setting. Place React code in `web/` directory.
+The React app lives in `web/` and supports per-day course selection via checkboxes.
+
+#### Deploy to GitHub Pages (frontend only)
+
+1. Ensure `web/package.json` includes the `homepage` field:
+   ```
+   "homepage": "https://<your-username>.github.io/<repo-name>"
+   ```
+2. Deploy:
+   ```powershell
+   cd C:\projects\gym-bot\web
+   npm run deploy
+   ```
+3. In GitHub repo settings, set Pages source to the `gh-pages` branch.
+
+#### Backend Hosting (Render example)
+
+GitHub Pages only hosts static files. Deploy the API separately and point `REACT_APP_API_URL` to it.
+
+- Build command: `pip install -r requirements.txt`
+- Start command: `uvicorn api.main:app --host 0.0.0.0 --port 10000`
+- Environment variables: `ENCRYPTION_KEY`
 
 ## Project Structure
 
