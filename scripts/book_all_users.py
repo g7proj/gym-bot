@@ -17,9 +17,9 @@ from gym_bot import schedule
 
 
 def should_run_now() -> bool:
-    """Ensure the job runs at 07:05 Europe/Rome, even with UTC cron."""
+    """Ensure the job runs at 07:XX Europe/Rome, even with UTC cron."""
     now = datetime.now(ZoneInfo("Europe/Rome"))
-    return now.hour == 7 and now.minute == 5
+    return now.hour == 7
 
 
 def main() -> None:
