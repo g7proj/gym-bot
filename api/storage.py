@@ -2,11 +2,10 @@
 Postgres-backed storage for users and preferences.
 """
 import os
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 import psycopg
 from psycopg.rows import dict_row
-from psycopg.types.json import Json
 
 from .models import User, UserCredentials, UserPreferences
 
@@ -24,8 +23,15 @@ class UserStorage:
     def _connect(self):
         return psycopg.connect(self.dsn, row_factory=dict_row)
 
-    def _row_to_user(self, row: Dict) -> User:
-        by_day = row.get("by_day") or {}
+    def _build_by_day(self, rows: List[Dict]) -> Dict[str, List[str]]:
+        by_day: Dict[str, List[str]] = {}
+        for row in rows:
+            weekday = row["weekday"]
+            course = row["course"]
+            by_day.setdefault(weekday, []).append(course)
+        return by_day
+
+    def _row_to_user(self, row: Dict, by_day: Dict[str, List[str]]) -> User:
         return User(
             id=str(row["id"]),
             credentials=UserCredentials(
@@ -35,31 +41,30 @@ class UserStorage:
             preferences=UserPreferences(by_day=by_day),
         )
 
+    def _fetch_preferences(self, conn, user_id: str) -> Dict[str, List[str]]:
+        rows = conn.execute(
+            "select weekday, course from preferences where user_id = %s",
+            (user_id,),
+        ).fetchall()
+        return self._build_by_day(rows)
+
     def get_user(self, user_id: str) -> Optional[User]:
-        query = """
-            select u.id, u.username, u.password_encrypted, p.by_day
-            from users u
-            left join preferences p on p.user_id = u.id
-            where u.id = %s
-        """
+        query = "select id, username, password_encrypted from users where id = %s"
         with self._connect() as conn:
             row = conn.execute(query, (user_id,)).fetchone()
             if not row:
                 return None
-            return self._row_to_user(row)
+            by_day = self._fetch_preferences(conn, str(row["id"]))
+            return self._row_to_user(row, by_day)
 
     def get_user_by_username(self, username: str) -> Optional[User]:
-        query = """
-            select u.id, u.username, u.password_encrypted, p.by_day
-            from users u
-            left join preferences p on p.user_id = u.id
-            where u.username = %s
-        """
+        query = "select id, username, password_encrypted from users where username = %s"
         with self._connect() as conn:
             row = conn.execute(query, (username,)).fetchone()
             if not row:
                 return None
-            return self._row_to_user(row)
+            by_day = self._fetch_preferences(conn, str(row["id"]))
+            return self._row_to_user(row, by_day)
 
     def upsert_user(self, username: str, password_encrypted: str) -> User:
         query = """
@@ -73,30 +78,46 @@ class UserStorage:
             row = conn.execute(query, (username, password_encrypted)).fetchone()
             if not row:
                 raise RuntimeError("Failed to upsert user")
-            # Fetch preferences if any
-            pref = conn.execute(
-                "select by_day from preferences where user_id = %s",
-                (row["id"],),
-            ).fetchone()
-            row["by_day"] = pref["by_day"] if pref else {}
-            return self._row_to_user(row)
+            by_day = self._fetch_preferences(conn, str(row["id"]))
+            return self._row_to_user(row, by_day)
 
     def save_preferences(self, user_id: str, by_day: Dict[str, List[str]]) -> None:
-        query = """
-            insert into preferences (user_id, by_day)
-            values (%s, %s)
-            on conflict (user_id)
-            do update set by_day = excluded.by_day, updated_at = now()
-        """
         with self._connect() as conn:
-            conn.execute(query, (user_id, Json(by_day)))
+            conn.execute("delete from preferences where user_id = %s", (user_id,))
+            rows: List[Tuple[str, str, str]] = []
+            for weekday, courses in by_day.items():
+                for course in courses:
+                    rows.append((user_id, weekday, course))
+            if rows:
+                with conn.cursor() as cur:
+                    cur.executemany(
+                        "insert into preferences (user_id, weekday, course) values (%s, %s, %s)",
+                        rows,
+                    )
 
     def list_users(self) -> List[User]:
-        query = """
-            select u.id, u.username, u.password_encrypted, p.by_day
-            from users u
-            left join preferences p on p.user_id = u.id
-        """
         with self._connect() as conn:
-            rows = conn.execute(query).fetchall()
-            return [self._row_to_user(row) for row in rows]
+            user_rows = conn.execute(
+                "select id, username, password_encrypted from users"
+            ).fetchall()
+            if not user_rows:
+                return []
+
+            user_ids = [str(row["id"]) for row in user_rows]
+            prefs_rows = conn.execute(
+                "select user_id, weekday, course from preferences where user_id = any(%s)",
+                (user_ids,),
+            ).fetchall()
+
+            by_user: Dict[str, Dict[str, List[str]]] = {}
+            for row in prefs_rows:
+                uid = str(row["user_id"])
+                by_user.setdefault(uid, {}).setdefault(row["weekday"], []).append(row["course"])
+
+            users: List[User] = []
+            for row in user_rows:
+                uid = str(row["id"])
+                by_day = by_user.get(uid, {})
+                users.append(self._row_to_user(row, by_day))
+
+            return users

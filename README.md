@@ -11,6 +11,7 @@ Personal automation for checking available gym courses via the `inforyou.teamsys
 - Support for environment variables and `.env` file for credentials
 - Multi-user support with encrypted storage and web interface (React + FastAPI)
 - Per-day course preferences (multiple courses per weekday)
+- Postgres-backed storage (Supabase)
 
 ## Requirements
 
@@ -97,11 +98,11 @@ python -m gym_bot.cli
 
 ### GitHub Actions
 
-The project includes a GitHub Actions workflow for automated daily booking. The workflow runs daily at 6:05 AM UTC and books courses based on user preferences stored in `data/users.json`.
+The project includes a GitHub Actions workflow for automated daily booking. The workflow runs daily at 7:05 AM Europe/Rome (handles CET/CEST) and books courses based on user preferences stored in Postgres.
 
 To set up automated booking:
 
-1. Ensure `data/users.json` contains user data with preferences
+1. Ensure Postgres is configured and reachable from the runner (`DATABASE_URL` in GitHub Secrets)
 2. Push the workflow file `.github/workflows/book.yml` to your repository
 3. The workflow will run automatically on schedule
 
@@ -110,12 +111,11 @@ To set up automated booking:
 - `POST /login`: Authenticate user and return user ID (reuses existing account by username and updates password)
 - `GET /users/{user_id}`: Get user data
 - `PUT /users/{user_id}/preferences`: Update user preferences (overwrites previous preferences)
-- `GET /users`: List all users (for admin purposes)
 
 ## Security
 
 - Passwords are encrypted using Fernet symmetric encryption
-- User data is stored in JSON format
+- User data is stored in Postgres
 - API uses CORS for cross-origin requests from the React frontend
 
 ## Testing
@@ -148,9 +148,9 @@ This will install:
 
 The script reads credentials and tokens from environment variables:
 
-- `GYM_USERNAME` – portal username
-- `GYM_PASSWORD` – portal password
-- `GYM_APP_TOKEN` – optional; if not set, a default value observed from the portal is used
+- `GYM_USERNAME` - portal username
+- `GYM_PASSWORD` - portal password
+- `GYM_APP_TOKEN` - optional; if not set, a default value observed from the portal is used
 
 To set them in the current PowerShell session:
 
@@ -202,8 +202,6 @@ The script performs the following steps:
 6. Prints to screen the lessons that match preferences, with date, time, description, and available spots
 7. If `--book` is used, attempts to book the earliest available lesson on the 20th day
 
-If something goes wrong (e.g., missing or incorrect credentials), the program terminates with an error message and a non-zero exit code.
-
 ## Course Preferences Format
 
 Both CLI and API use the same preferences structure: a mapping of weekday to a list of course keywords.
@@ -226,7 +224,7 @@ Notes:
 
 ## GitHub Actions Automation
 
-The project includes a GitHub Actions workflow (`.github/workflows/book.yml`) that runs daily at 7:05 AM Europe/Rome (handles CET/CEST) to automatically book gym lessons using saved user preferences.
+The project includes a GitHub Actions workflow (`.github/workflows/book.yml`) that runs daily at 7:05 AM Europe/Rome (handles CET/CEST) to automatically book gym lessons using saved user preferences stored in Postgres.
 
 The workflow runs `scripts/book_all_users.py` (separate file, not inline).
 
@@ -236,22 +234,6 @@ The workflow runs `scripts/book_all_users.py` (separate file, not inline).
    - `ENCRYPTION_KEY`: Fernet key used to decrypt stored passwords
 
 2. The workflow will run automatically every day. You can also trigger it manually from the Actions tab.
-
-### Testing
-
-To test locally without booking:
-
-```powershell
-cd C:\projects\gym-bot\src
-python -m gym_bot.cli
-```
-
-To test booking (use with caution):
-
-```powershell
-cd C:\projects\gym-bot\src
-python -m gym_bot.cli --book
-```
 
 ## Multi-User API (FastAPI Backend)
 
@@ -271,7 +253,11 @@ The system supports multiple users with a REST API for registration and preferen
    ```
    Add the output as `ENCRYPTION_KEY` in GitHub Secrets (and in Render if deploying the API).
 
-3. Run the API server:
+3. Configure Postgres:
+   - Create a Supabase project and run `db/schema.sql` in the SQL editor.
+   - Add `DATABASE_URL` to Render and GitHub Secrets.
+
+4. Run the API server:
    ```powershell
    uvicorn api.main:app --reload
    ```
@@ -289,6 +275,7 @@ To test the multi-user API locally:
 1. **Set Environment Variables**:
    ```powershell
    $env:ENCRYPTION_KEY = "your_generated_key_here"
+   $env:DATABASE_URL = "postgresql://postgres:***@your-supabase-host:5432/postgres"
    ```
 
 2. **Start the Server**:
@@ -307,7 +294,7 @@ To test the multi-user API locally:
                       -Headers @{ "Content-Type" = "application/json" } `
                       -Body '{"username": "your_username", "password": "your_password"}'
      ```
-     Expected response: `{"message": "Login successful", "user_id": "uuid"}`
+     Expected response: `{ "message": "Login successful", "user_id": "uuid" }`
 
 4. **Test Preferences Update**:
    ```powershell
@@ -347,7 +334,7 @@ GitHub Pages only hosts static files. Deploy the API separately and point `REACT
 
 - Build command: `pip install -r requirements.txt`
 - Start command: `uvicorn api.main:app --host 0.0.0.0 --port 10000`
-- Environment variables: `ENCRYPTION_KEY`
+- Environment variables: `ENCRYPTION_KEY`, `DATABASE_URL`
 
 ## Project Structure
 
@@ -357,6 +344,7 @@ The project logic is divided into:
 - `gym_bot/config.py`: configuration values and reading credentials/tokens from environment variables.
 - `gym_bot/schedule.py`: functions for working with dates/times and filtering lessons based on weekly preferences.
 - `gym_bot/cli.py`: terminal entrypoint that orchestrates calls to the previous modules and prints output.
+- `scripts/book_all_users.py`: batch booking job for GitHub Actions.
 
 ## Security Notes
 

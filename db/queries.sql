@@ -23,16 +23,17 @@ where username = $1;
 
 -- Preferences
 
--- Upsert preferences by user_id
--- params: $1=user_id, $2=by_day_jsonb
-insert into preferences (user_id, by_day)
-values ($1, $2)
-on conflict (user_id)
-do update set by_day = excluded.by_day, updated_at = now()
-returning user_id, by_day;
+-- Delete preferences by user_id
+-- params: $1=user_id
+delete from preferences where user_id = $1;
+
+-- Insert preference row
+-- params: $1=user_id, $2=weekday, $3=course
+insert into preferences (user_id, weekday, course)
+values ($1, $2, $3);
 
 -- Get preferences by user_id
 -- params: $1=user_id
-select user_id, by_day
+select user_id, weekday, course
 from preferences
 where user_id = $1;
