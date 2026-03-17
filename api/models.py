@@ -10,13 +10,14 @@ class UserCredentials(BaseModel):
     password: str = Field(..., description="Plain password (will be encrypted on save)")
 
 class UserPreferences(BaseModel):
-    """Course preferences."""
-    days: List[str] = Field(default_factory=list, description="Preferred days")
-    courses: List[str] = Field(default_factory=list, description="Preferred courses")
+    """Course preferences by weekday."""
+    by_day: Dict[str, List[str]] = Field(
+        default_factory=dict,
+        description="Mapping of weekday (monday..sunday) to course keywords",
+    )
 
 class User(BaseModel):
     """Complete user model."""
     id: str = Field(..., description="Unique user identifier")
     credentials: UserCredentials
     preferences: UserPreferences = Field(default_factory=UserPreferences, description="Course preferences")
-    email: Optional[str] = Field(None, description="Optional email for notifications")

@@ -1,7 +1,9 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+const WEEKDAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+const AVAILABLE_COURSES = ['yoga', 'weightlifting'];
 
 function App() {
   const [userId, setUserId] = useState(localStorage.getItem('userId') || null);
@@ -127,27 +129,32 @@ function LoginForm({ onLogin, loading }) {
 }
 
 function Dashboard({ user, onUpdatePreferences, onLogout, loading }) {
-  const [selectedDays, setSelectedDays] = useState(user?.preferences?.days || []);
-  const [selectedCourses, setSelectedCourses] = useState(user?.preferences?.courses || []);
+  const [byDay, setByDay] = useState({});
 
-  const days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
-  const courses = ['yoga', 'weightlifting'];
+  useEffect(() => {
+    const normalized = {};
+    WEEKDAYS.forEach((day) => {
+      const values = user?.preferences?.by_day?.[day] || [];
+      normalized[day] = Array.isArray(values) ? values : [];
+    });
+    setByDay(normalized);
+  }, [user]);
 
-  const handleDayChange = (day) => {
-    setSelectedDays(prev =>
-      prev.includes(day) ? prev.filter(d => d !== day) : [...prev, day]
-    );
-  };
-
-  const handleCourseChange = (course) => {
-    setSelectedCourses(prev =>
-      prev.includes(course) ? prev.filter(c => c !== course) : [...prev, course]
-    );
+  const toggleCourseForDay = (day, course) => {
+    setByDay((prev) => {
+      const current = new Set(prev[day] || []);
+      if (current.has(course)) {
+        current.delete(course);
+      } else {
+        current.add(course);
+      }
+      return { ...prev, [day]: Array.from(current) };
+    });
   };
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    onUpdatePreferences({ days: selectedDays, courses: selectedCourses });
+    onUpdatePreferences({ by_day: byDay });
   };
 
   return (
@@ -163,35 +170,27 @@ function Dashboard({ user, onUpdatePreferences, onLogout, loading }) {
       </div>
 
       <form onSubmit={handleSubmit}>
-        <h3 className="text-lg font-semibold mb-4">Course Preferences</h3>
-        
-        <div className="mb-4">
-          <h4 className="text-md font-medium mb-2">Preferred Days</h4>
-          {days.map(day => (
-            <label key={day} className="inline-flex items-center mr-4">
-              <input
-                type="checkbox"
-                checked={selectedDays.includes(day)}
-                onChange={() => handleDayChange(day)}
-                className="mr-2"
-              />
-              {day.charAt(0).toUpperCase() + day.slice(1)}
-            </label>
-          ))}
-        </div>
-
-        <div className="mb-4">
-          <h4 className="text-md font-medium mb-2">Preferred Courses</h4>
-          {courses.map(course => (
-            <label key={course} className="inline-flex items-center mr-4">
-              <input
-                type="checkbox"
-                checked={selectedCourses.includes(course)}
-                onChange={() => handleCourseChange(course)}
-                className="mr-2"
-              />
-              {course.charAt(0).toUpperCase() + course.slice(1)}
-            </label>
+        <h3 className="text-lg font-semibold mb-2">Course Preferences</h3>
+        <div className="space-y-4 mb-4">
+          {WEEKDAYS.map((day) => (
+            <div key={day} className="border rounded p-3">
+              <div className="text-sm font-semibold mb-2">
+                {day.charAt(0).toUpperCase() + day.slice(1)}
+              </div>
+              <div className="flex flex-wrap gap-3">
+                {AVAILABLE_COURSES.map((course) => (
+                  <label key={`${day}-${course}`} className="inline-flex items-center">
+                    <input
+                      type="checkbox"
+                      className="mr-2"
+                      checked={(byDay[day] || []).includes(course)}
+                      onChange={() => toggleCourseForDay(day, course)}
+                    />
+                    {course.charAt(0).toUpperCase() + course.slice(1)}
+                  </label>
+                ))}
+              </div>
+            </div>
           ))}
         </div>
 

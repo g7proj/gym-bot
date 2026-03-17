@@ -46,15 +46,17 @@ async def login(credentials: UserCredentials):
     except GymClientError as e:
         raise HTTPException(status_code=401, detail=f"Login failed: {e}")
     
-    # Generate user ID and save encrypted credentials
-    user_id = str(uuid.uuid4())
+    # Generate or reuse user ID and save encrypted credentials
+    existing_user = storage.get_user_by_username(credentials.username)
+    user_id = existing_user.id if existing_user else str(uuid.uuid4())
     encrypted_password = crypto.encrypt(credentials.password)
     user = User(
         id=user_id,
         credentials=UserCredentials(
             username=credentials.username,
             password=encrypted_password
-        )
+        ),
+        preferences=existing_user.preferences if existing_user else UserPreferences(),
     )
     storage.save_user(user)
     

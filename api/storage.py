@@ -57,6 +57,16 @@ class UserStorage:
         """
         users = self.load_users()
         return users.get(user_id)
+
+    def get_user_by_username(self, username: str) -> Optional[User]:
+        """
+        Find a user by gym portal username.
+        """
+        users = self.load_users()
+        for user in users.values():
+            if user.credentials.username == username:
+                return user
+        return None
     
     def save_user(self, user: User) -> None:
         """
