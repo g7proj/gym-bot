@@ -1,0 +1,13 @@
+{
+  "files": {
+    "main.css": "/gym-bot/static/css/main.a7a2797a.css",
+    "main.js": "/gym-bot/static/js/main.ca1a06ed.js",
+    "index.html": "/gym-bot/index.html",
+    "main.a7a2797a.css.map": "/gym-bot/static/css/main.a7a2797a.css.map",
+    "main.ca1a06ed.js.map": "/gym-bot/static/js/main.ca1a06ed.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.a7a2797a.css",
+    "static/js/main.ca1a06ed.js"
+  ]
+}
