@@ -27,5 +27,6 @@ jobs:
       - name: Run gym booking for all users
         env:
           ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: |
           python scripts/book_all_users.py

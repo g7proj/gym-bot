@@ -1,80 +1,101 @@
 """
-JSON-based storage for users. Easily replaceable with SQLite later.
+Postgres-backed storage for users and preferences.
 """
-import json
 import os
 from typing import Dict, List, Optional
-from .models import User
+
+import psycopg
+from psycopg.rows import dict_row
+
+from .models import User, UserCredentials, UserPreferences
+
 
 class UserStorage:
     """
-    Handles loading and saving users to a JSON file.
+    Handles loading and saving users in Postgres.
     """
-    
-    def __init__(self, file_path: str = "data/users.json"):
-        """
-        Initialize storage with file path.
-        
-        Args:
-            file_path: Path to JSON file.
-        """
-        self.file_path = file_path
-        os.makedirs(os.path.dirname(file_path), exist_ok=True)
-    
-    def load_users(self) -> Dict[str, User]:
-        """
-        Load all users from JSON file.
-        
-        Returns:
-            Dict of user_id -> User objects.
-        """
-        if not os.path.exists(self.file_path):
-            return {}
-        with open(self.file_path, "r") as f:
-            data = json.load(f)
-        return {user_id: User(**user_data) for user_id, user_data in data.items()}
-    
-    def save_users(self, users: Dict[str, User]) -> None:
-        """
-        Save all users to JSON file.
-        
-        Args:
-            users: Dict of user_id -> User objects.
-        """
-        data = {user_id: user.dict() for user_id, user in users.items()}
-        with open(self.file_path, "w") as f:
-            json.dump(data, f, indent=2)
-    
+
+    def __init__(self, dsn: Optional[str] = None):
+        self.dsn = dsn or os.getenv("DATABASE_URL")
+        if not self.dsn:
+            raise ValueError("DATABASE_URL environment variable not set")
+
+    def _connect(self):
+        return psycopg.connect(self.dsn, row_factory=dict_row)
+
+    def _row_to_user(self, row: Dict) -> User:
+        by_day = row.get("by_day") or {}
+        return User(
+            id=str(row["id"]),
+            credentials=UserCredentials(
+                username=row["username"],
+                password=row["password_encrypted"],
+            ),
+            preferences=UserPreferences(by_day=by_day),
+        )
+
     def get_user(self, user_id: str) -> Optional[User]:
+        query = """
+            select u.id, u.username, u.password_encrypted, p.by_day
+            from users u
+            left join preferences p on p.user_id = u.id
+            where u.id = %s
         """
-        Get a specific user by ID.
-        
-        Args:
-            user_id: User identifier.
-        
-        Returns:
-            User object or None if not found.
-        """
-        users = self.load_users()
-        return users.get(user_id)
+        with self._connect() as conn:
+            row = conn.execute(query, (user_id,)).fetchone()
+            if not row:
+                return None
+            return self._row_to_user(row)
 
     def get_user_by_username(self, username: str) -> Optional[User]:
+        query = """
+            select u.id, u.username, u.password_encrypted, p.by_day
+            from users u
+            left join preferences p on p.user_id = u.id
+            where u.username = %s
         """
-        Find a user by gym portal username.
+        with self._connect() as conn:
+            row = conn.execute(query, (username,)).fetchone()
+            if not row:
+                return None
+            return self._row_to_user(row)
+
+    def upsert_user(self, username: str, password_encrypted: str) -> User:
+        query = """
+            insert into users (username, password_encrypted)
+            values (%s, %s)
+            on conflict (username)
+            do update set password_encrypted = excluded.password_encrypted, updated_at = now()
+            returning id, username, password_encrypted
         """
-        users = self.load_users()
-        for user in users.values():
-            if user.credentials.username == username:
-                return user
-        return None
-    
-    def save_user(self, user: User) -> None:
+        with self._connect() as conn:
+            row = conn.execute(query, (username, password_encrypted)).fetchone()
+            if not row:
+                raise RuntimeError("Failed to upsert user")
+            # Fetch preferences if any
+            pref = conn.execute(
+                "select by_day from preferences where user_id = %s",
+                (row["id"],),
+            ).fetchone()
+            row["by_day"] = pref["by_day"] if pref else {}
+            return self._row_to_user(row)
+
+    def save_preferences(self, user_id: str, by_day: Dict[str, List[str]]) -> None:
+        query = """
+            insert into preferences (user_id, by_day)
+            values (%s, %s)
+            on conflict (user_id)
+            do update set by_day = excluded.by_day, updated_at = now()
         """
-        Save or update a single user.
-        
-        Args:
-            user: User object to save.
+        with self._connect() as conn:
+            conn.execute(query, (user_id, by_day))
+
+    def list_users(self) -> List[User]:
+        query = """
+            select u.id, u.username, u.password_encrypted, p.by_day
+            from users u
+            left join preferences p on p.user_id = u.id
         """
-        users = self.load_users()
-        users[user.id] = user
-        self.save_users(users)
+        with self._connect() as conn:
+            rows = conn.execute(query).fetchall()
+            return [self._row_to_user(row) for row in rows]

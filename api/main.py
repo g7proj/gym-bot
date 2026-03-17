@@ -51,21 +51,10 @@ async def login(credentials: UserCredentials):
     except GymClientError as e:
         raise HTTPException(status_code=401, detail=f"Login failed: {e}")
     
-    # Generate or reuse user ID and save encrypted credentials
-    existing_user = storage.get_user_by_username(credentials.username)
-    user_id = existing_user.id if existing_user else str(uuid.uuid4())
     encrypted_password = crypto.encrypt(credentials.password)
-    user = User(
-        id=user_id,
-        credentials=UserCredentials(
-            username=credentials.username,
-            password=encrypted_password
-        ),
-        preferences=existing_user.preferences if existing_user else UserPreferences(),
-    )
-    storage.save_user(user)
+    user = storage.upsert_user(credentials.username, encrypted_password)
     
-    return {"message": "Login successful", "user_id": user_id}
+    return {"message": "Login successful", "user_id": user.id}
 
 @app.put("/users/{user_id}/preferences")
 async def update_preferences(user_id: str, preferences: PreferencesUpdate):
@@ -89,8 +78,7 @@ async def update_preferences(user_id: str, preferences: PreferencesUpdate):
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    user.preferences = UserPreferences(by_day=preferences.by_day)
-    storage.save_user(user)
+    storage.save_preferences(user.id, preferences.by_day)
     return {"message": "Preferences updated", "user_id": user.id}
 
 @app.get("/users/{user_id}", response_model=User)

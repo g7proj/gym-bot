@@ -9,6 +9,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "src"))
 
+from api.storage import UserStorage
 from utils.crypto import CryptoUtils
 from gym_bot.client import GymClient
 from gym_bot.config import Credentials
@@ -16,26 +17,29 @@ from gym_bot import schedule
 
 
 def should_run_now() -> bool:
-    """Ensure the job runs at 07:XX Europe/Rome, even with UTC cron."""
+    """Ensure the job runs at 07:05 Europe/Rome, even with UTC cron."""
     now = datetime.now(ZoneInfo("Europe/Rome"))
-    return now.hour == 7
+    return now.hour == 7 and now.minute == 5
 
 
 def main() -> None:
-    # if not should_run_now():
-    #     print("Skipping run: not 07:05 Europe/Rome.")
-    #     return
+    if not should_run_now():
+        print("Skipping run: not 07:05 Europe/Rome.")
+        return
+
+    storage = UserStorage()
+    users = storage.list_users()
+    if not users:
+        print("No users found; nothing to do.")
+        return
 
     crypto = CryptoUtils()
-    with open("data/users.json", "r", encoding="utf-8") as f:
-        users_data = json.load(f)
-
-    for user_id, user in users_data.items():
-        print(f"Processing user {user_id}")
+    for user in users:
+        print(f"Processing user {user.id}")
         try:
-            password = crypto.decrypt(user["credentials"]["password"])
+            password = crypto.decrypt(user.credentials.password)
             credentials = Credentials(
-                username=user["credentials"]["username"],
+                username=user.credentials.username,
                 password=password,
             )
 
@@ -54,7 +58,7 @@ def main() -> None:
             )
 
             items = response.get("Items", [])
-            preferences = (user.get("preferences") or {}).get("by_day", {})
+            preferences = user.preferences.by_day or {}
 
             filtered = []
             for item in items:
@@ -104,14 +108,14 @@ def main() -> None:
                 )
 
                 if book_response.get("Successful"):
-                    print(f"Booking successful for user {user_id}")
+                    print(f"Booking successful for user {user.id}")
                 else:
-                    print(f"Booking failed for user {user_id}")
+                    print(f"Booking failed for user {user.id}")
             else:
-                print(f"No available lessons for user {user_id}")
+                print(f"No available lessons for user {user.id}")
 
         except Exception as exc:
-            print(f"Error processing user {user_id}: {exc}")
+            print(f"Error processing user {user.id}: {exc}")
 
 
 if __name__ == "__main__":
