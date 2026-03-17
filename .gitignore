@@ -30,4 +30,5 @@ dist/
 # Local environment & config
 .env
 *.local.*
+data/users.json
 
