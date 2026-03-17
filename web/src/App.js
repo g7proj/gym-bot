@@ -1,0 +1,210 @@
+import React, { useState } from 'react';
+import axios from 'axios';
+
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+
+function App() {
+  const [userId, setUserId] = useState(localStorage.getItem('userId') || null);
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleLogin = async (username, password) => {
+    setLoading(true);
+    setError('');
+    try {
+      const response = await axios.post(`${API_BASE_URL}/login`, {
+        username,
+        password,
+      });
+      setUserId(response.data.user_id);
+      localStorage.setItem('userId', response.data.user_id);
+      await loadUser(response.data.user_id);
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Login failed');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadUser = async (id) => {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/users/${id}`);
+      setUser(response.data);
+    } catch (err) {
+      setError('Failed to load user data');
+    }
+  };
+
+  const updatePreferences = async (preferences) => {
+    setLoading(true);
+    setError('');
+    try {
+      await axios.put(`${API_BASE_URL}/users/${userId}/preferences`, preferences);
+      await loadUser(userId);
+    } catch (err) {
+      setError('Failed to update preferences');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleLogout = () => {
+    setUserId(null);
+    setUser(null);
+    localStorage.removeItem('userId');
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
+      <div className="max-w-md w-full bg-white rounded-lg shadow-md p-6">
+        <h1 className="text-2xl font-bold text-center mb-6 text-blue-600">Gym Bot</h1>
+        
+        {error && (
+          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+            {error}
+          </div>
+        )}
+
+        {!userId ? (
+          <LoginForm onLogin={handleLogin} loading={loading} />
+        ) : (
+          <Dashboard user={user} onUpdatePreferences={updatePreferences} onLogout={handleLogout} loading={loading} />
+        )}
+      </div>
+    </div>
+  );
+}
+
+function LoginForm({ onLogin, loading }) {
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    onLogin(username, password);
+  };
+
+  return (
+    <form onSubmit={handleSubmit}>
+      <div className="mb-4">
+        <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="username">
+          Username
+        </label>
+        <input
+          className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+          id="username"
+          type="text"
+          value={username}
+          onChange={(e) => setUsername(e.target.value)}
+          required
+        />
+      </div>
+      <div className="mb-6">
+        <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="password">
+          Password
+        </label>
+        <input
+          className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 mb-3 leading-tight focus:outline-none focus:shadow-outline"
+          id="password"
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          required
+        />
+      </div>
+      <div className="flex items-center justify-between">
+        <button
+          className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline disabled:opacity-50"
+          type="submit"
+          disabled={loading}
+        >
+          {loading ? 'Logging in...' : 'Sign In'}
+        </button>
+      </div>
+    </form>
+  );
+}
+
+function Dashboard({ user, onUpdatePreferences, onLogout, loading }) {
+  const [selectedDays, setSelectedDays] = useState(user?.preferences?.days || []);
+  const [selectedCourses, setSelectedCourses] = useState(user?.preferences?.courses || []);
+
+  const days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+  const courses = ['yoga', 'weightlifting'];
+
+  const handleDayChange = (day) => {
+    setSelectedDays(prev =>
+      prev.includes(day) ? prev.filter(d => d !== day) : [...prev, day]
+    );
+  };
+
+  const handleCourseChange = (course) => {
+    setSelectedCourses(prev =>
+      prev.includes(course) ? prev.filter(c => c !== course) : [...prev, course]
+    );
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    onUpdatePreferences({ days: selectedDays, courses: selectedCourses });
+  };
+
+  return (
+    <div>
+      <div className="mb-6">
+        <h2 className="text-xl font-semibold mb-2">Welcome, {user?.credentials?.username}!</h2>
+        <button
+          onClick={onLogout}
+          className="bg-red-500 hover:bg-red-700 text-white font-bold py-1 px-3 rounded text-sm"
+        >
+          Logout
+        </button>
+      </div>
+
+      <form onSubmit={handleSubmit}>
+        <h3 className="text-lg font-semibold mb-4">Course Preferences</h3>
+        
+        <div className="mb-4">
+          <h4 className="text-md font-medium mb-2">Preferred Days</h4>
+          {days.map(day => (
+            <label key={day} className="inline-flex items-center mr-4">
+              <input
+                type="checkbox"
+                checked={selectedDays.includes(day)}
+                onChange={() => handleDayChange(day)}
+                className="mr-2"
+              />
+              {day.charAt(0).toUpperCase() + day.slice(1)}
+            </label>
+          ))}
+        </div>
+
+        <div className="mb-4">
+          <h4 className="text-md font-medium mb-2">Preferred Courses</h4>
+          {courses.map(course => (
+            <label key={course} className="inline-flex items-center mr-4">
+              <input
+                type="checkbox"
+                checked={selectedCourses.includes(course)}
+                onChange={() => handleCourseChange(course)}
+                className="mr-2"
+              />
+              {course.charAt(0).toUpperCase() + course.slice(1)}
+            </label>
+          ))}
+        </div>
+
+        <button
+          className="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline disabled:opacity-50"
+          type="submit"
+          disabled={loading}
+        >
+          {loading ? 'Updating...' : 'Update Preferences'}
+        </button>
+      </form>
+    </div>
+  );
+}
+
+export default App;

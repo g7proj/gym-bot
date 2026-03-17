@@ -16,7 +16,7 @@ app = FastAPI(title="Gym Booking API", version="1.0.0")
 # CORS for frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "https://your-frontend-domain.com"],  # Update for production
+    allow_origins=["http://localhost:3000", "http://localhost:3001", "http://localhost:3002", "https://your-frontend-domain.com"],  # Update for production
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -31,7 +31,7 @@ async def login(credentials: UserCredentials):
     Verify gym credentials by attempting login.
     
     Args:
-        credentials: Username and password (password will be encrypted if successful).
+        credentials: Username and password.
     
     Returns:
         Success message with user ID if login succeeds.
@@ -39,26 +39,21 @@ async def login(credentials: UserCredentials):
     Raises:
         HTTPException: If login fails.
     """
-    try:
-        # Decrypt password for login attempt
-        password = crypto.decrypt(credentials.password_encrypted)
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Decryption failed: {e}")
-    
     client = GymClient()
     try:
-        creds = Credentials(username=credentials.username, password=password)
+        creds = Credentials(username=credentials.username, password=credentials.password)
         client.login(creds)
     except GymClientError as e:
         raise HTTPException(status_code=401, detail=f"Login failed: {e}")
     
     # Generate user ID and save encrypted credentials
     user_id = str(uuid.uuid4())
+    encrypted_password = crypto.encrypt(credentials.password)
     user = User(
         id=user_id,
         credentials=UserCredentials(
             username=credentials.username,
-            password_encrypted=credentials.password_encrypted  # Already encrypted from frontend
+            password=encrypted_password
         )
     )
     storage.save_user(user)

@@ -48,6 +48,95 @@ With the virtual environment active:
 pip install -r requirements.txt
 ```
 
+### 3. Setup Frontend (React)
+
+Navigate to the web directory and install Node.js dependencies:
+
+```powershell
+cd web
+npm install
+```
+
+Create a `.env` file in the `web` directory with your API URL:
+
+```
+REACT_APP_API_URL=http://localhost:8000
+```
+
+## Usage
+
+### Backend API
+
+Start the FastAPI server:
+
+```powershell
+python -m api.main
+```
+
+The API will be available at `http://localhost:8000`.
+
+### Frontend Web App
+
+In a separate terminal, start the React development server:
+
+```powershell
+cd web
+npm start
+```
+
+The web app will be available at `http://localhost:3000`.
+
+### CLI Tool
+
+For single-user CLI usage:
+
+```powershell
+python -m gym_bot.cli
+```
+
+### GitHub Actions
+
+The project includes a GitHub Actions workflow for automated daily booking. The workflow runs daily at 6 AM UTC and books courses based on user preferences stored in `data/users.json`.
+
+To set up automated booking:
+
+1. Ensure `data/users.json` contains user data with preferences
+2. Push the workflow file `.github/workflows/book.yml` to your repository
+3. The workflow will run automatically on schedule
+
+## API Endpoints
+
+- `POST /login`: Authenticate user and return user ID
+- `GET /users/{user_id}`: Get user data
+- `PUT /users/{user_id}/preferences`: Update user preferences
+- `GET /users`: List all users (for admin purposes)
+
+## Security
+
+- Passwords are encrypted using Fernet symmetric encryption
+- User data is stored in JSON format
+- API uses CORS for cross-origin requests from the React frontend
+
+## Testing
+
+### API Testing with PowerShell
+
+Test login endpoint:
+
+```powershell
+Invoke-WebRequest -Uri "http://localhost:8000/login" -Method POST -ContentType "application/json" -Body '{"username":"your_username","password":"your_password"}'
+```
+
+Test getting user data:
+
+```powershell
+Invoke-WebRequest -Uri "http://localhost:8000/users/1" -Method GET
+```
+
+### Frontend Testing
+
+Open `http://localhost:3000` in your browser and test the login form and preferences editor.
+
 This will install:
 
 - `requests` for HTTP calls to the API
