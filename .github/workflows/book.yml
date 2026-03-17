@@ -2,7 +2,8 @@ name: Daily Gym Booking
 
 on:
   schedule:
-    - cron: '5 6 * * *'  # Runs daily at 6:05 AM UTC (7:05 AM CET)
+    - cron: '5 6 * * *'  # 07:05 Europe/Rome during CET (UTC+1)
+    - cron: '5 5 * * *'  # 07:05 Europe/Rome during CEST (UTC+2)
   workflow_dispatch:  # Allows manual triggering for testing
 
 jobs:
@@ -27,100 +28,4 @@ jobs:
         env:
           ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
         run: |
-          python -c "
-          import json
-          import sys
-          import os
-          sys.path.append('src')
-          from utils.crypto import CryptoUtils
-          from gym_bot.client import GymClient, GymClientError
-          from gym_bot import schedule
-          from gym_bot.config import Credentials
-          
-          crypto = CryptoUtils()
-          with open('data/users.json') as f:
-              users_data = json.load(f)
-          
-          for user_id, user in users_data.items():
-              print(f'Processing user {user_id}')
-              try:
-                  password = crypto.decrypt(user['credentials']['password'])
-                  credentials = Credentials(username=user['credentials']['username'], password=password)
-                  
-                  client = GymClient()
-                  client.login(credentials)
-                  
-                  # Get booking window and lessons
-                  start_dt, end_dt = schedule.get_booking_window()
-                  time_start_dt, time_end_dt = schedule.get_daily_time_window()
-                  
-                  start_date_str = start_dt.isoformat(timespec='seconds')
-                  end_date_str = end_dt.isoformat(timespec='seconds')
-                  time_start_str = time_start_dt.isoformat(timespec='seconds')
-                  time_end_str = time_end_dt.isoformat(timespec='seconds')
-                  
-                  response = client.list_with_mine(
-                      start_date=start_date_str,
-                      end_date=end_date_str,
-                      time_start=time_start_str,
-                      time_end=time_end_str,
-                      types=None,
-                  )
-                  
-                  items = response.get('Items', [])
-                  preferences = (user.get('preferences') or {}).get('by_day', {})
-                  
-                  # Filter lessons
-                  filtered = []
-                  for item in items:
-                      date_lesson_str = item.get('DateLesson')
-                      service_desc = (item.get('ServiceDescription') or '').lower()
-                      if not date_lesson_str or not service_desc:
-                          continue
-                      
-                      d = schedule.parse_api_date(date_lesson_str)
-                      if d is None:
-                          continue
-                      
-                      weekday_name = schedule.WEEKDAY_EN.get(d.weekday())
-                      if not weekday_name:
-                          continue
-                      
-                      wanted_keywords = preferences.get(weekday_name, [])
-                      if any(keyword in service_desc for keyword in wanted_keywords):
-                          filtered.append(item)
-                  
-                  # Book on 20th day
-                  twentieth_day = end_dt.date()
-                  available = [
-                      item for item in filtered
-                      if item.get('AvailablePlaces', 0) > 0 and schedule.parse_api_date(item.get('DateLesson')) == twentieth_day
-                  ]
-                  
-                  if available:
-                      available.sort(key=lambda x: schedule.parse_api_time(x.get('StartTime')) or schedule.time.min)
-                      first = available[0]
-                      
-                      lesson_date = schedule.parse_api_date(first['DateLesson'])
-                      start_time_obj = schedule.parse_api_time(first['StartTime'])
-                      end_time_obj = schedule.parse_api_time(first['EndTime'])
-                      start_datetime = schedule.datetime.combine(lesson_date, start_time_obj)
-                      end_datetime = schedule.datetime.combine(lesson_date, end_time_obj)
-                      
-                      book_response = client.book(
-                          booking_id=first['IDServizio'],
-                          start_time=start_datetime.isoformat(timespec='seconds'),
-                          end_time=end_datetime.isoformat(timespec='seconds'),
-                          lesson_id=first['IDLesson'],
-                      )
-                      
-                      if book_response.get('Successful'):
-                          print(f'Booking successful for user {user_id}')
-                      else:
-                          print(f'Booking failed for user {user_id}')
-                  else:
-                      print(f'No available lessons for user {user_id}')
-              
-              except Exception as e:
-                  print(f'Error processing user {user_id}: {e}')
-          "
+          python scripts/book_all_users.py

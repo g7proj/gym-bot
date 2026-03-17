@@ -6,7 +6,7 @@ Personal automation for checking available gym courses via the `inforyou.teamsys
 
 - Authenticate with the gym portal using username and password
 - Retrieve available lessons for the next 20 days
-- Filter lessons based on day of the week and course keywords defined in `courses.yaml`
+- Filter lessons based on day of the week and course keywords defined in preferences
 - Display lesson details including date, time, description, and available spots
 - Support for environment variables and `.env` file for credentials
 - Multi-user support with encrypted storage and web interface (React + FastAPI)
@@ -142,7 +142,7 @@ This will install:
 
 - `requests` for HTTP calls to the API
 - `python-dotenv` for loading variables from `.env`
-- `PyYAML` (used for course configuration)
+- `PyYAML` (used for course configuration in CLI-only setups)
 
 ### 3. Configure Credentials and Token
 
@@ -198,7 +198,7 @@ The script performs the following steps:
 2. Reads `GYM_USERNAME` and `GYM_PASSWORD`
 3. Calls the portal login endpoint and obtains the token
 4. Calls the lessons endpoint (`/webbooking/listwithmine`) for the next 20 days (including today)
-5. Applies filters defined in the `courses.yaml` file based on day of the week and course keywords
+5. Applies filters defined in user preferences based on day of the week and course keywords
 6. Prints to screen the lessons that match preferences, with date, time, description, and available spots
 7. If `--book` is used, attempts to book the earliest available lesson on the 20th day
 
@@ -224,36 +224,11 @@ Notes:
 - Keywords are matched case-insensitively against `ServiceDescription`.
 - Each day can have multiple courses.
 
-## Course Configuration (`courses.yaml`)
-
-To specify the courses you are interested in based on the day of the week, use the `courses.yaml` file in the project root.
-
-Example:
-
-```yaml
-monday:
-  - "yoga"
-tuesday:
-  - "weightlifting"
-wednesday:
-  - "weightlifting"
-thursday:
-  - "weightlifting"
-friday:
-  - "weightlifting"
-saturday:
-  - "yoga"
-```
-
-Notes:
-
-- Day names must be in English, lowercase (`monday`, `tuesday`, …).
-- Strings in the list are keywords compared case-insensitively with the `ServiceDescription` field of lessons.
-- You can specify multiple courses for the same day (just add more entries in the list).
-
 ## GitHub Actions Automation
 
-The project includes a GitHub Actions workflow (`.github/workflows/book.yml`) that runs daily at 7:05 AM UTC to automatically book gym lessons. It uses the `--book` flag to attempt booking the first available lesson on the 20th day matching your `courses.yaml` preferences.
+The project includes a GitHub Actions workflow (`.github/workflows/book.yml`) that runs daily at 7:05 AM Europe/Rome (handles CET/CEST) to automatically book gym lessons using saved user preferences.
+
+The workflow runs `scripts/book_all_users.py` (separate file, not inline).
 
 ### Setup
 
@@ -381,7 +356,6 @@ The project logic is divided into:
 - `gym_bot/client.py`: handles all HTTP calls (login, service list, lesson list, bookings).
 - `gym_bot/config.py`: configuration values and reading credentials/tokens from environment variables.
 - `gym_bot/schedule.py`: functions for working with dates/times and filtering lessons based on weekly preferences.
-- `gym_bot/courses_config.py`: reading and normalizing the `courses.yaml` file.
 - `gym_bot/cli.py`: terminal entrypoint that orchestrates calls to the previous modules and prints output.
 
 ## Security Notes
