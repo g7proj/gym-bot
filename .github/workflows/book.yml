@@ -35,6 +35,7 @@ jobs:
           from utils.crypto import CryptoUtils
           from gym_bot.client import GymClient, GymClientError
           from gym_bot import schedule
+          from gym_bot.config import Credentials
           
           crypto = CryptoUtils()
           with open('data/users.json') as f:
@@ -43,8 +44,8 @@ jobs:
           for user_id, user in users_data.items():
               print(f'Processing user {user_id}')
               try:
-                  password = crypto.decrypt(user['credentials']['password_encrypted'])
-                  credentials = {'username': user['credentials']['username'], 'password': password}
+                  password = crypto.decrypt(user['credentials']['password'])
+                  credentials = Credentials(username=user['credentials']['username'], password=password)
                   
                   client = GymClient()
                   client.login(credentials)
@@ -67,7 +68,7 @@ jobs:
                   )
                   
                   items = response.get('Items', [])
-                  preferences = user.get('preferences', {})
+                  preferences = (user.get('preferences') or {}).get('by_day', {})
                   
                   # Filter lessons
                   filtered = []
