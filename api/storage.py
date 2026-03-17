@@ -6,6 +6,7 @@ from typing import Dict, List, Optional
 
 import psycopg
 from psycopg.rows import dict_row
+from psycopg.types.json import Json
 
 from .models import User, UserCredentials, UserPreferences
 
@@ -88,7 +89,7 @@ class UserStorage:
             do update set by_day = excluded.by_day, updated_at = now()
         """
         with self._connect() as conn:
-            conn.execute(query, (user_id, by_day))
+            conn.execute(query, (user_id, Json(by_day)))
 
     def list_users(self) -> List[User]:
         query = """
