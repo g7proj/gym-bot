@@ -42,8 +42,18 @@ function App() {
     setLoading(true);
     setError('');
     try {
-      await axios.put(`${API_BASE_URL}/users/${userId}/preferences`, preferences);
-      await loadUser(userId);
+      const response = await axios.put(`${API_BASE_URL}/users/${userId}/preferences`, {
+        ...preferences,
+        username: user?.credentials?.username || null,
+      });
+      const updatedId = response.data?.user_id;
+      if (updatedId && updatedId !== userId) {
+        setUserId(updatedId);
+        localStorage.setItem('userId', updatedId);
+        await loadUser(updatedId);
+      } else {
+        await loadUser(userId);
+      }
     } catch (err) {
       setError('Failed to update preferences');
     } finally {

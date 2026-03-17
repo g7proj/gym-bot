@@ -5,7 +5,7 @@ Provides endpoints for user login verification and preference management.
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 import uuid
-from .models import User, UserCredentials, UserPreferences
+from .models import PreferencesUpdate, User, UserCredentials, UserPreferences
 from .storage import UserStorage
 from utils.crypto import CryptoUtils
 from src.gym_bot.client import GymClient, GymClientError
@@ -68,7 +68,7 @@ async def login(credentials: UserCredentials):
     return {"message": "Login successful", "user_id": user_id}
 
 @app.put("/users/{user_id}/preferences")
-async def update_preferences(user_id: str, preferences: UserPreferences):
+async def update_preferences(user_id: str, preferences: PreferencesUpdate):
     """
     Update course preferences for a user.
     
@@ -83,12 +83,15 @@ async def update_preferences(user_id: str, preferences: UserPreferences):
         HTTPException: If user not found.
     """
     user = storage.get_user(user_id)
+    if not user and preferences.username:
+        user = storage.get_user_by_username(preferences.username)
+
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    
-    user.preferences = preferences
+
+    user.preferences = UserPreferences(by_day=preferences.by_day)
     storage.save_user(user)
-    return {"message": "Preferences updated"}
+    return {"message": "Preferences updated", "user_id": user.id}
 
 @app.get("/users/{user_id}", response_model=User)
 async def get_user(user_id: str):

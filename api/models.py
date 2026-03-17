@@ -16,6 +16,17 @@ class UserPreferences(BaseModel):
         description="Mapping of weekday (monday..sunday) to course keywords",
     )
 
+class PreferencesUpdate(BaseModel):
+    """Update payload for user preferences."""
+    by_day: Dict[str, List[str]] = Field(
+        default_factory=dict,
+        description="Mapping of weekday (monday..sunday) to course keywords",
+    )
+    username: Optional[str] = Field(
+        None,
+        description="Gym portal username (used to resolve existing users)",
+    )
+
 class User(BaseModel):
     """Complete user model."""
     id: str = Field(..., description="Unique user identifier")
