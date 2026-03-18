@@ -102,39 +102,6 @@ class UserStorage:
                     )
             conn.commit()
 
-    def replace_preferences_for_user(
-        self,
-        user_id: str,
-        by_day: Dict[str, List[str]],
-        allowed_courses: Dict[str, List[str]] | None = None,
-    ) -> None:
-        normalized: Dict[str, List[str]] = {}
-        allowed_norm: Dict[str, List[str]] = {}
-        if allowed_courses:
-            for weekday, courses in allowed_courses.items():
-                allowed_norm[weekday] = sorted({c.strip().lower() for c in courses if c.strip()})
-
-        for weekday, courses in by_day.items():
-            cleaned = {str(c).strip().lower() for c in courses if str(c).strip()}
-            if allowed_norm:
-                cleaned = {c for c in cleaned if c in allowed_norm.get(weekday, [])}
-            if cleaned:
-                normalized[weekday] = sorted(cleaned)
-
-        with self._connect() as conn:
-            conn.execute("delete from preferences where user_id = %s", (user_id,))
-            rows: List[Tuple[str, str, str]] = []
-            for weekday, courses in normalized.items():
-                for course in courses:
-                    rows.append((user_id, weekday, course))
-            if rows:
-                with conn.cursor() as cur:
-                    cur.executemany(
-                        "insert into preferences (user_id, weekday, course) values (%s, %s, %s)",
-                        rows,
-                    )
-            conn.commit()
-
     def list_users(self) -> List[User]:
         with self._connect() as conn:
             user_rows = conn.execute(

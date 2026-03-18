@@ -129,7 +129,7 @@ async def update_preferences(user_id: str, preferences: PreferencesUpdate):
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    storage.replace_preferences_for_user(user.id, preferences.by_day, allowed_courses=None)
+    storage.save_preferences(user.id, preferences.by_day)
     return {"message": "Preferences updated", "user_id": user.id}
 
 @app.get("/users/{user_id}", response_model=User)
