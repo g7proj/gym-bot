@@ -5,10 +5,10 @@ const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 const WEEKDAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
 
 const NOTICE_COLORS = {
-  success: 'bg-green-100 border-green-400 text-green-700',
-  info: 'bg-blue-100 border-blue-400 text-blue-700',
-  warning: 'bg-yellow-100 border-yellow-400 text-yellow-700',
-  error: 'bg-red-100 border-red-400 text-red-700',
+  success: 'bg-green-600',
+  info: 'bg-blue-600',
+  warning: 'bg-yellow-600',
+  error: 'bg-red-600',
 };
 
 function App() {
@@ -107,7 +107,7 @@ function App() {
         <h1 className="text-2xl font-bold text-center mb-6 text-blue-600">Gym Bot</h1>
 
         {notice && (
-          <div className={`border px-4 py-2 rounded mb-4 ${NOTICE_COLORS[notice.type]}`}>
+          <div className={`fixed top-4 right-4 z-50 text-white px-4 py-2 rounded shadow-lg ${NOTICE_COLORS[notice.type]}`}>
             {notice.message}
           </div>
         )}

@@ -87,32 +87,34 @@ def main() -> None:
                 and schedule.parse_api_date(item.get("DateLesson")) == twentieth_day
             ]
 
-            if available:
-                available.sort(
-                    key=lambda x: schedule.parse_api_time(x.get("StartTime"))
-                    or schedule.time.min
-                )
-                first = available[0]
+            if not available:
+                print(f"No available lessons for user {user.id}")
+                continue
 
-                lesson_date = schedule.parse_api_date(first["DateLesson"])
-                start_time_obj = schedule.parse_api_time(first["StartTime"])
-                end_time_obj = schedule.parse_api_time(first["EndTime"])
+            # Book all available lessons for the 20th day
+            available.sort(
+                key=lambda x: schedule.parse_api_time(x.get("StartTime"))
+                or schedule.time.min
+            )
+
+            for lesson in available:
+                lesson_date = schedule.parse_api_date(lesson["DateLesson"])
+                start_time_obj = schedule.parse_api_time(lesson["StartTime"])
+                end_time_obj = schedule.parse_api_time(lesson["EndTime"])
                 start_datetime = schedule.datetime.combine(lesson_date, start_time_obj)
                 end_datetime = schedule.datetime.combine(lesson_date, end_time_obj)
 
                 book_response = client.book(
-                    booking_id=first["IDServizio"],
+                    booking_id=lesson["IDServizio"],
                     start_time=start_datetime.isoformat(timespec="seconds"),
                     end_time=end_datetime.isoformat(timespec="seconds"),
-                    lesson_id=first["IDLesson"],
+                    lesson_id=lesson["IDLesson"],
                 )
 
                 if book_response.get("Successful"):
-                    print(f"Booking successful for user {user.id}")
+                    print(f"Booking successful for user {user.id} lesson {lesson.get('IDLesson')}")
                 else:
-                    print(f"Booking failed for user {user.id}")
-            else:
-                print(f"No available lessons for user {user.id}")
+                    print(f"Booking failed for user {user.id} lesson {lesson.get('IDLesson')}")
 
         except Exception as exc:
             print(f"Error processing user {user.id}: {exc}")
