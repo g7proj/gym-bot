@@ -5,10 +5,10 @@ const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 const WEEKDAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
 
 const NOTICE_COLORS = {
-  success: 'bg-green-600',
-  info: 'bg-blue-600',
-  warning: 'bg-yellow-600',
-  error: 'bg-red-600',
+  success: 'bg-emerald-600',
+  info: 'bg-sky-600',
+  warning: 'bg-amber-600',
+  error: 'bg-rose-600',
 };
 
 function App() {
@@ -102,18 +102,51 @@ function App() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
-      <div className="max-w-4xl w-full bg-white rounded-lg shadow-md p-6">
-        <h1 className="text-2xl font-bold text-center mb-6 text-blue-600">Gym Bot</h1>
-
-        {notice && (
-          <div className={`fixed top-4 right-4 z-50 text-white px-4 py-2 rounded shadow-lg ${NOTICE_COLORS[notice.type]}`}>
-            {notice.message}
+    <div className="min-h-screen bg-gradient-to-b from-slate-50 via-white to-slate-100 text-slate-900">
+      {notice && (
+        <div
+          className={`fixed bottom-4 left-1/2 z-50 -translate-x-1/2 text-white px-4 py-2 rounded-full shadow-lg ${NOTICE_COLORS[notice.type]}`}
+        >
+          {notice.message}
+        </div>
+      )}
+      <div className="mx-auto max-w-5xl px-4 py-6 md:py-10">
+        <header className="mb-6 flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white/80 p-5 shadow-sm backdrop-blur">
+          <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+            <div>
+              <h1 className="text-2xl font-semibold tracking-tight">Gym Bot</h1>
+              <p className="text-sm text-slate-600">
+                Weekly course preferences with automatic booking.
+              </p>
+            </div>
+            {userId && (
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => loadCourses(userId)}
+                  className="rounded-full border border-slate-300 bg-white px-3 py-1 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
+                  type="button"
+                >
+                  Refresh courses
+                </button>
+                <button
+                  onClick={handleLogout}
+                  className="rounded-full bg-slate-900 px-3 py-1 text-sm font-medium text-white shadow-sm hover:bg-slate-800"
+                  type="button"
+                >
+                  Logout
+                </button>
+              </div>
+            )}
           </div>
-        )}
-        
+          {user?.credentials?.username && (
+            <div className="text-sm text-slate-600">
+              Signed in as <span className="font-medium text-slate-800">{user.credentials.username}</span>
+            </div>
+          )}
+        </header>
+
         {error && (
-          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+          <div className="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
             {error}
           </div>
         )}
@@ -124,9 +157,7 @@ function App() {
           <Dashboard
             user={user}
             coursesByDay={coursesByDay}
-            onReloadCourses={() => loadCourses(userId)}
             onUpdatePreferences={updatePreferences}
-            onLogout={handleLogout}
             loading={loading}
           />
         )}
@@ -145,47 +176,49 @@ function LoginForm({ onLogin, loading }) {
   };
 
   return (
-    <form onSubmit={handleSubmit}>
-      <div className="mb-4">
-        <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="username">
-          Username
-        </label>
-        <input
-          className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-          id="username"
-          type="text"
-          value={username}
-          onChange={(e) => setUsername(e.target.value)}
-          required
-        />
-      </div>
-      <div className="mb-6">
-        <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="password">
-          Password
-        </label>
-        <input
-          className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 mb-3 leading-tight focus:outline-none focus:shadow-outline"
-          id="password"
-          type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          required
-        />
-      </div>
-      <div className="flex items-center justify-between">
+    <div className="mx-auto w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+      <h2 className="mb-2 text-lg font-semibold">Sign in</h2>
+      <p className="mb-4 text-sm text-slate-600">Use your gym portal credentials.</p>
+      <form onSubmit={handleSubmit}>
+        <div className="mb-4">
+          <label className="block text-sm font-medium text-slate-700" htmlFor="username">
+            Username
+          </label>
+          <input
+            className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-700 shadow-sm focus:border-slate-400 focus:outline-none"
+            id="username"
+            type="text"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            required
+          />
+        </div>
+        <div className="mb-6">
+          <label className="block text-sm font-medium text-slate-700" htmlFor="password">
+            Password
+          </label>
+          <input
+            className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-700 shadow-sm focus:border-slate-400 focus:outline-none"
+            id="password"
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+          />
+        </div>
         <button
-          className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline disabled:opacity-50"
+          className="w-full rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-slate-800 disabled:opacity-60"
           type="submit"
           disabled={loading}
         >
           {loading ? 'Logging in...' : 'Sign In'}
         </button>
-      </div>
-    </form>
+      </form>
+    </div>
   );
 }
 
-function Dashboard({ user, coursesByDay, onReloadCourses, onUpdatePreferences, onLogout, loading }) {
+function Dashboard({ user, coursesByDay, onUpdatePreferences, loading }) {
   const [byDay, setByDay] = useState({});
   const [courseFilter, setCourseFilter] = useState('');
 
@@ -219,92 +252,87 @@ function Dashboard({ user, coursesByDay, onReloadCourses, onUpdatePreferences, o
   const filterValue = courseFilter.trim().toLowerCase();
 
   return (
-    <div>
-      <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h2 className="text-xl font-semibold">Welcome, {user?.credentials?.username}!</h2>
-          <p className="text-sm text-gray-600">Select the courses you want for each day.</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={onReloadCourses}
-            className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-1 px-3 rounded text-sm"
-            type="button"
-          >
-            Refresh courses
-          </button>
-          <button
-            onClick={onLogout}
-            className="bg-red-500 hover:bg-red-700 text-white font-bold py-1 px-3 rounded text-sm"
-            type="button"
-          >
-            Logout
-          </button>
-        </div>
+    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="mb-5">
+        <h2 className="text-lg font-semibold">Course preferences</h2>
+        <p className="text-sm text-slate-600">
+          Choose the classes you want for each day. Use search to narrow down the list.
+        </p>
       </div>
 
-      <form onSubmit={handleSubmit}>
-        <div className="mb-4">
-          <label className="block text-sm font-semibold mb-2" htmlFor="courseFilter">
-            Search courses
-          </label>
-          <input
-            id="courseFilter"
-            type="text"
-            className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-            placeholder="Type to filter"
-            value={courseFilter}
-            onChange={(e) => setCourseFilter(e.target.value)}
-          />
+      <div className="mb-5">
+        <label className="block text-sm font-medium text-slate-700" htmlFor="courseFilter">
+          Search courses
+        </label>
+        <input
+          id="courseFilter"
+          type="text"
+          className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-700 shadow-sm focus:border-slate-400 focus:outline-none"
+          placeholder="Type to filter"
+          value={courseFilter}
+          onChange={(e) => setCourseFilter(e.target.value)}
+        />
+      </div>
+
+      {!hasCourses && (
+        <div className="mb-4 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+          No courses found for this week. Try refreshing.
         </div>
+      )}
 
-        {!hasCourses && (
-          <div className="text-sm text-gray-600 mb-3">
-            No courses found for this week. Try refreshing.
-          </div>
-        )}
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        {WEEKDAYS.map((day) => {
+          const dayCourses = (coursesByDay[day] || []).filter((course) => {
+            if (!filterValue) return true;
+            return course.includes(filterValue);
+          });
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-          {WEEKDAYS.map((day) => {
-            const dayCourses = (coursesByDay[day] || []).filter((course) => {
-              if (!filterValue) return true;
-              return course.includes(filterValue);
-            });
-
-            return (
-              <div key={day} className="border rounded p-3">
-                <div className="text-sm font-semibold mb-2">
-                  {day.charAt(0).toUpperCase() + day.slice(1)}
-                </div>
-                <div className="flex flex-wrap gap-3">
-                  {dayCourses.map((course) => (
-                    <label key={`${day}-${course}`} className="inline-flex items-center">
+          return (
+            <div key={day} className="rounded-xl border border-slate-200 bg-slate-50/60 p-4">
+              <div className="mb-3 text-sm font-semibold text-slate-700">
+                {day.charAt(0).toUpperCase() + day.slice(1)}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {dayCourses.map((course) => {
+                  const checked = (byDay[day] || []).includes(course);
+                  return (
+                    <label
+                      key={`${day}-${course}`}
+                      className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-sm transition ${
+                        checked
+                          ? 'border-slate-900 bg-slate-900 text-white'
+                          : 'border-slate-300 bg-white text-slate-700 hover:border-slate-400'
+                      }`}
+                    >
                       <input
                         type="checkbox"
-                        className="mr-2"
-                        checked={(byDay[day] || []).includes(course)}
+                        className="sr-only"
+                        checked={checked}
                         onChange={() => toggleCourseForDay(day, course)}
                       />
                       {course.charAt(0).toUpperCase() + course.slice(1)}
                     </label>
-                  ))}
-                  {dayCourses.length === 0 && (
-                    <span className="text-sm text-gray-500">No courses</span>
-                  )}
-                </div>
+                  );
+                })}
+                {dayCourses.length === 0 && (
+                  <span className="text-sm text-slate-500">No courses</span>
+                )}
               </div>
-            );
-          })}
-        </div>
+            </div>
+          );
+        })}
+      </div>
 
+      <div className="mt-6 flex justify-end">
         <button
-          className="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline disabled:opacity-50"
+          className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-slate-800 disabled:opacity-60"
           type="submit"
           disabled={loading}
+          onClick={handleSubmit}
         >
           {loading ? 'Updating...' : 'Update Preferences'}
         </button>
-      </form>
+      </div>
     </div>
   );
 }
