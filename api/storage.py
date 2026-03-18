@@ -82,10 +82,16 @@ class UserStorage:
             return self._row_to_user(row, by_day)
 
     def save_preferences(self, user_id: str, by_day: Dict[str, List[str]]) -> None:
+        normalized: Dict[str, List[str]] = {}
+        for weekday, courses in by_day.items():
+            cleaned = sorted({str(c).strip().lower() for c in courses if str(c).strip()})
+            if cleaned:
+                normalized[weekday] = cleaned
+
         with self._connect() as conn:
             conn.execute("delete from preferences where user_id = %s", (user_id,))
             rows: List[Tuple[str, str, str]] = []
-            for weekday, courses in by_day.items():
+            for weekday, courses in normalized.items():
                 for course in courses:
                     rows.append((user_id, weekday, course))
             if rows:
@@ -94,6 +100,7 @@ class UserStorage:
                         "insert into preferences (user_id, weekday, course) values (%s, %s, %s)",
                         rows,
                     )
+            conn.commit()
 
     def list_users(self) -> List[User]:
         with self._connect() as conn:

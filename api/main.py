@@ -4,7 +4,7 @@ Provides endpoints for user login verification and preference management.
 """
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import Response
 from typing import Dict, List
 from .models import PreferencesUpdate, User, UserCredentials
 from .storage import UserStorage
@@ -32,9 +32,9 @@ app.add_middleware(
 storage = UserStorage()
 crypto = CryptoUtils()
 
-@app.get("/wake", response_class=PlainTextResponse)
-async def wake() -> str:
-    return "Ok"
+@app.get("/wake", status_code=204)
+async def wake() -> Response:
+    return Response(status_code=204)
 
 @app.post("/login", response_model=dict)
 async def login(credentials: UserCredentials):

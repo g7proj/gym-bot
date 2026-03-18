@@ -103,7 +103,7 @@ function App() {
 
   return (
     <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
-      <div className="max-w-md w-full bg-white rounded-lg shadow-md p-6">
+      <div className="max-w-4xl w-full bg-white rounded-lg shadow-md p-6">
         <h1 className="text-2xl font-bold text-center mb-6 text-blue-600">Gym Bot</h1>
 
         {notice && (
@@ -220,8 +220,11 @@ function Dashboard({ user, coursesByDay, onReloadCourses, onUpdatePreferences, o
 
   return (
     <div>
-      <div className="mb-6">
-        <h2 className="text-xl font-semibold mb-2">Welcome, {user?.credentials?.username}!</h2>
+      <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div>
+          <h2 className="text-xl font-semibold">Welcome, {user?.credentials?.username}!</h2>
+          <p className="text-sm text-gray-600">Select the courses you want for each day.</p>
+        </div>
         <div className="flex items-center gap-2">
           <button
             onClick={onReloadCourses}
@@ -241,22 +244,27 @@ function Dashboard({ user, coursesByDay, onReloadCourses, onUpdatePreferences, o
       </div>
 
       <form onSubmit={handleSubmit}>
-        <h3 className="text-lg font-semibold mb-2">Course Preferences</h3>
-        <div className="mb-3">
+        <div className="mb-4">
+          <label className="block text-sm font-semibold mb-2" htmlFor="courseFilter">
+            Search courses
+          </label>
           <input
+            id="courseFilter"
             type="text"
             className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-            placeholder="Search courses"
+            placeholder="Type to filter"
             value={courseFilter}
             onChange={(e) => setCourseFilter(e.target.value)}
           />
         </div>
+
         {!hasCourses && (
           <div className="text-sm text-gray-600 mb-3">
             No courses found for this week. Try refreshing.
           </div>
         )}
-        <div className="space-y-4 mb-4">
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
           {WEEKDAYS.map((day) => {
             const dayCourses = (coursesByDay[day] || []).filter((course) => {
               if (!filterValue) return true;
