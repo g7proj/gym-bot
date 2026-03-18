@@ -68,6 +68,19 @@ def get_daily_time_window(today: date | None = None) -> Tuple[datetime, datetime
     return start_dt, end_dt
 
 
+def get_week_window(today: date | None = None) -> Tuple[datetime, datetime]:
+    """
+    Return start and end datetime for the current week (Monday to Sunday).
+    """
+    if today is None:
+        today = date.today()
+    start_day = today - timedelta(days=today.weekday())
+    end_day = start_day + timedelta(days=6)
+    start_dt = datetime.combine(start_day, time(0, 0, 0))
+    end_dt = datetime.combine(end_day, time(23, 59, 59))
+    return start_dt, end_dt
+
+
 def filter_lessons_by_preferences(
     lessons: List[Dict[str, Any]],
     preferences: Dict[str, List[str]],
@@ -101,4 +114,3 @@ def filter_lessons_by_preferences(
             filtered.append(item)
 
     return filtered
-

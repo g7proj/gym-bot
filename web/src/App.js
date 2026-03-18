@@ -3,13 +3,13 @@ import axios from 'axios';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 const WEEKDAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
-const AVAILABLE_COURSES = ['yoga', 'weightlifting'];
 
 function App() {
   const [userId, setUserId] = useState(localStorage.getItem('userId') || null);
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [coursesByDay, setCoursesByDay] = useState({});
 
   useEffect(() => {
     axios.get(`${API_BASE_URL}/wake`).catch(() => {});
@@ -26,6 +26,7 @@ function App() {
       setUserId(response.data.user_id);
       localStorage.setItem('userId', response.data.user_id);
       await loadUser(response.data.user_id);
+      await loadCourses(response.data.user_id);
     } catch (err) {
       setError(err.response?.data?.detail || 'Login failed');
     } finally {
@@ -42,6 +43,15 @@ function App() {
     }
   };
 
+  const loadCourses = async (id) => {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/users/${id}/courses`);
+      setCoursesByDay(response.data?.by_day || {});
+    } catch (err) {
+      setCoursesByDay({});
+    }
+  };
+
   const updatePreferences = async (preferences) => {
     setLoading(true);
     setError('');
@@ -55,8 +65,10 @@ function App() {
         setUserId(updatedId);
         localStorage.setItem('userId', updatedId);
         await loadUser(updatedId);
+        await loadCourses(updatedId);
       } else {
         await loadUser(userId);
+        await loadCourses(userId);
       }
     } catch (err) {
       setError('Failed to update preferences');
@@ -68,6 +80,7 @@ function App() {
   const handleLogout = () => {
     setUserId(null);
     setUser(null);
+    setCoursesByDay({});
     localStorage.removeItem('userId');
   };
 
@@ -85,7 +98,14 @@ function App() {
         {!userId ? (
           <LoginForm onLogin={handleLogin} loading={loading} />
         ) : (
-          <Dashboard user={user} onUpdatePreferences={updatePreferences} onLogout={handleLogout} loading={loading} />
+          <Dashboard
+            user={user}
+            coursesByDay={coursesByDay}
+            onReloadCourses={() => loadCourses(userId)}
+            onUpdatePreferences={updatePreferences}
+            onLogout={handleLogout}
+            loading={loading}
+          />
         )}
       </div>
     </div>
@@ -142,7 +162,7 @@ function LoginForm({ onLogin, loading }) {
   );
 }
 
-function Dashboard({ user, onUpdatePreferences, onLogout, loading }) {
+function Dashboard({ user, coursesByDay, onReloadCourses, onUpdatePreferences, onLogout, loading }) {
   const [byDay, setByDay] = useState({});
 
   useEffect(() => {
@@ -171,20 +191,37 @@ function Dashboard({ user, onUpdatePreferences, onLogout, loading }) {
     onUpdatePreferences({ by_day: byDay });
   };
 
+  const hasCourses = Object.keys(coursesByDay || {}).length > 0;
+
   return (
     <div>
       <div className="mb-6">
         <h2 className="text-xl font-semibold mb-2">Welcome, {user?.credentials?.username}!</h2>
-        <button
-          onClick={onLogout}
-          className="bg-red-500 hover:bg-red-700 text-white font-bold py-1 px-3 rounded text-sm"
-        >
-          Logout
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={onReloadCourses}
+            className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-1 px-3 rounded text-sm"
+            type="button"
+          >
+            Refresh courses
+          </button>
+          <button
+            onClick={onLogout}
+            className="bg-red-500 hover:bg-red-700 text-white font-bold py-1 px-3 rounded text-sm"
+            type="button"
+          >
+            Logout
+          </button>
+        </div>
       </div>
 
       <form onSubmit={handleSubmit}>
         <h3 className="text-lg font-semibold mb-2">Course Preferences</h3>
+        {!hasCourses && (
+          <div className="text-sm text-gray-600 mb-3">
+            No courses found for this week. Try refreshing.
+          </div>
+        )}
         <div className="space-y-4 mb-4">
           {WEEKDAYS.map((day) => (
             <div key={day} className="border rounded p-3">
@@ -192,7 +229,7 @@ function Dashboard({ user, onUpdatePreferences, onLogout, loading }) {
                 {day.charAt(0).toUpperCase() + day.slice(1)}
               </div>
               <div className="flex flex-wrap gap-3">
-                {AVAILABLE_COURSES.map((course) => (
+                {(coursesByDay[day] || []).map((course) => (
                   <label key={`${day}-${course}`} className="inline-flex items-center">
                     <input
                       type="checkbox"
@@ -203,6 +240,9 @@ function Dashboard({ user, onUpdatePreferences, onLogout, loading }) {
                     {course.charAt(0).toUpperCase() + course.slice(1)}
                   </label>
                 ))}
+                {(coursesByDay[day] || []).length === 0 && (
+                  <span className="text-sm text-gray-500">No courses</span>
+                )}
               </div>
             </div>
           ))}
