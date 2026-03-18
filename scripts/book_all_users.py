@@ -24,7 +24,7 @@ def should_run_now() -> bool:
 
 def main() -> None:
     if not should_run_now():
-        print("Skipping run: not 07:05 Europe/Rome.")
+        print("Skipping run: not 07:XX Europe/Rome.")
         return
 
     storage = UserStorage()
@@ -88,7 +88,7 @@ def main() -> None:
             ]
 
             if not available:
-                print(f"No available lessons for user {user.id}")
+                print(f"No available lessons for user {user.id} on {twentieth_day}")
                 continue
 
             # Book all available lessons for the 20th day
