@@ -4,16 +4,30 @@ import axios from 'axios';
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 const WEEKDAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
 
+const NOTICE_COLORS = {
+  success: 'bg-green-100 border-green-400 text-green-700',
+  info: 'bg-blue-100 border-blue-400 text-blue-700',
+  warning: 'bg-yellow-100 border-yellow-400 text-yellow-700',
+  error: 'bg-red-100 border-red-400 text-red-700',
+};
+
 function App() {
   const [userId, setUserId] = useState(localStorage.getItem('userId') || null);
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [coursesByDay, setCoursesByDay] = useState({});
+  const [notice, setNotice] = useState(null);
 
   useEffect(() => {
     axios.get(`${API_BASE_URL}/wake`).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (!notice) return;
+    const timer = setTimeout(() => setNotice(null), 3500);
+    return () => clearTimeout(timer);
+  }, [notice]);
 
   const handleLogin = async (username, password) => {
     setLoading(true);
@@ -49,6 +63,7 @@ function App() {
       setCoursesByDay(response.data?.by_day || {});
     } catch (err) {
       setCoursesByDay({});
+      setNotice({ type: 'warning', message: 'Unable to load courses for this week.' });
     }
   };
 
@@ -70,8 +85,10 @@ function App() {
         await loadUser(userId);
         await loadCourses(userId);
       }
+      setNotice({ type: 'success', message: 'Preferences updated.' });
     } catch (err) {
       setError('Failed to update preferences');
+      setNotice({ type: 'error', message: 'Failed to update preferences.' });
     } finally {
       setLoading(false);
     }
@@ -88,6 +105,12 @@ function App() {
     <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
       <div className="max-w-md w-full bg-white rounded-lg shadow-md p-6">
         <h1 className="text-2xl font-bold text-center mb-6 text-blue-600">Gym Bot</h1>
+
+        {notice && (
+          <div className={`border px-4 py-2 rounded mb-4 ${NOTICE_COLORS[notice.type]}`}>
+            {notice.message}
+          </div>
+        )}
         
         {error && (
           <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
@@ -164,6 +187,7 @@ function LoginForm({ onLogin, loading }) {
 
 function Dashboard({ user, coursesByDay, onReloadCourses, onUpdatePreferences, onLogout, loading }) {
   const [byDay, setByDay] = useState({});
+  const [courseFilter, setCourseFilter] = useState('');
 
   useEffect(() => {
     const normalized = {};
@@ -192,6 +216,7 @@ function Dashboard({ user, coursesByDay, onReloadCourses, onUpdatePreferences, o
   };
 
   const hasCourses = Object.keys(coursesByDay || {}).length > 0;
+  const filterValue = courseFilter.trim().toLowerCase();
 
   return (
     <div>
@@ -217,35 +242,51 @@ function Dashboard({ user, coursesByDay, onReloadCourses, onUpdatePreferences, o
 
       <form onSubmit={handleSubmit}>
         <h3 className="text-lg font-semibold mb-2">Course Preferences</h3>
+        <div className="mb-3">
+          <input
+            type="text"
+            className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+            placeholder="Search courses"
+            value={courseFilter}
+            onChange={(e) => setCourseFilter(e.target.value)}
+          />
+        </div>
         {!hasCourses && (
           <div className="text-sm text-gray-600 mb-3">
             No courses found for this week. Try refreshing.
           </div>
         )}
         <div className="space-y-4 mb-4">
-          {WEEKDAYS.map((day) => (
-            <div key={day} className="border rounded p-3">
-              <div className="text-sm font-semibold mb-2">
-                {day.charAt(0).toUpperCase() + day.slice(1)}
+          {WEEKDAYS.map((day) => {
+            const dayCourses = (coursesByDay[day] || []).filter((course) => {
+              if (!filterValue) return true;
+              return course.includes(filterValue);
+            });
+
+            return (
+              <div key={day} className="border rounded p-3">
+                <div className="text-sm font-semibold mb-2">
+                  {day.charAt(0).toUpperCase() + day.slice(1)}
+                </div>
+                <div className="flex flex-wrap gap-3">
+                  {dayCourses.map((course) => (
+                    <label key={`${day}-${course}`} className="inline-flex items-center">
+                      <input
+                        type="checkbox"
+                        className="mr-2"
+                        checked={(byDay[day] || []).includes(course)}
+                        onChange={() => toggleCourseForDay(day, course)}
+                      />
+                      {course.charAt(0).toUpperCase() + course.slice(1)}
+                    </label>
+                  ))}
+                  {dayCourses.length === 0 && (
+                    <span className="text-sm text-gray-500">No courses</span>
+                  )}
+                </div>
               </div>
-              <div className="flex flex-wrap gap-3">
-                {(coursesByDay[day] || []).map((course) => (
-                  <label key={`${day}-${course}`} className="inline-flex items-center">
-                    <input
-                      type="checkbox"
-                      className="mr-2"
-                      checked={(byDay[day] || []).includes(course)}
-                      onChange={() => toggleCourseForDay(day, course)}
-                    />
-                    {course.charAt(0).toUpperCase() + course.slice(1)}
-                  </label>
-                ))}
-                {(coursesByDay[day] || []).length === 0 && (
-                  <span className="text-sm text-gray-500">No courses</span>
-                )}
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
         <button

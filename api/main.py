@@ -54,9 +54,9 @@ async def login(credentials: UserCredentials):
     return {"message": "Login successful", "user_id": user.id}
 
 @app.get("/users/{user_id}/courses", response_model=dict)
-async def get_courses(user_id: str, include_weekend: bool = False):
+async def get_courses(user_id: str, include_weekend: bool = True):
     """
-    Return available courses for the current week, grouped by weekday.
+    Return available courses for the next 7 days, grouped by weekday.
     """
     user = storage.get_user(user_id)
     if not user:
@@ -70,7 +70,7 @@ async def get_courses(user_id: str, include_weekend: bool = False):
     except GymClientError as e:
         raise HTTPException(status_code=401, detail=f"Login failed: {e}")
 
-    start_dt, end_dt = schedule.get_week_window()
+    start_dt, end_dt = schedule.get_rolling_week_window()
     time_start_dt, time_end_dt = schedule.get_daily_time_window()
 
     try:
@@ -106,11 +106,10 @@ async def get_courses(user_id: str, include_weekend: bool = False):
         if not include_weekend and weekday_name in {"saturday", "sunday"}:
             continue
 
-        key = weekday_name
-        by_day.setdefault(key, [])
+        by_day.setdefault(weekday_name, [])
         normalized = service_desc.lower()
-        if normalized not in by_day[key]:
-            by_day[key].append(normalized)
+        if normalized not in by_day[weekday_name]:
+            by_day[weekday_name].append(normalized)
 
     # Sort for stable UI
     for day in by_day:
