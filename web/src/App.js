@@ -11,6 +11,10 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  useEffect(() => {
+    axios.get(`${API_BASE_URL}/wake`).catch(() => {});
+  }, []);
+
   const handleLogin = async (username, password) => {
     setLoading(true);
     setError('');

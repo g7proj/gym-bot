@@ -2,8 +2,9 @@
 FastAPI backend for gym booking system.
 Provides endpoints for user login verification and preference management.
 """
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import PlainTextResponse
 import uuid
 from .models import PreferencesUpdate, User, UserCredentials, UserPreferences
 from .storage import UserStorage
@@ -29,6 +30,10 @@ app.add_middleware(
 
 storage = UserStorage()
 crypto = CryptoUtils()
+
+@app.get("/wake", response_class=PlainTextResponse)
+async def wake() -> str:
+    return "Ok"
 
 @app.post("/login", response_model=dict)
 async def login(credentials: UserCredentials):
