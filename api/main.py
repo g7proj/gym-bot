@@ -54,7 +54,7 @@ async def login(credentials: UserCredentials):
     return {"message": "Login successful", "user_id": user.id}
 
 @app.get("/users/{user_id}/courses", response_model=dict)
-async def get_courses(user_id: str, include_weekend: bool = True):
+async def get_courses(user_id: str):
     """
     Return available courses for the next 7 days, grouped by weekday.
     """
@@ -103,9 +103,6 @@ async def get_courses(user_id: str, include_weekend: bool = True):
         if not weekday_name:
             continue
 
-        if not include_weekend and weekday_name in {"saturday", "sunday"}:
-            continue
-
         by_day.setdefault(weekday_name, [])
         normalized = service_desc.lower()
         if normalized not in by_day[weekday_name]:
@@ -129,7 +126,7 @@ async def update_preferences(user_id: str, preferences: PreferencesUpdate):
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    storage.replace_preferences_for_user(user.id, preferences.by_day, allowed_courses=None)
+    storage.save_preferences(user.id, preferences.by_day)
     return {"message": "Preferences updated", "user_id": user.id}
 
 @app.get("/users/{user_id}", response_model=User)
