@@ -6,8 +6,6 @@ BASE_URL = "https://inforyou.teamsystem.com/dream/api/v1"
 COMPANY_ID = 2
 
 
-GYM_USERNAME_ENV = "GYM_USERNAME"
-GYM_PASSWORD_ENV = "GYM_PASSWORD"
 GYM_APP_TOKEN_ENV = "GYM_APP_TOKEN"
 
 # Default AppToken observed from the web portal.
@@ -27,26 +25,6 @@ class Credentials:
     password: str
 
 
-def get_credentials() -> Credentials:
-    """
-    Read gym portal credentials from environment variables.
-    """
-    username = os.getenv(GYM_USERNAME_ENV)
-    password = os.getenv(GYM_PASSWORD_ENV)
-
-    if not username or not password:
-        missing = []
-        if not username:
-            missing.append(GYM_USERNAME_ENV)
-        if not password:
-            missing.append(GYM_PASSWORD_ENV)
-        raise RuntimeError(
-            f"Missing required environment variables: {', '.join(missing)}"
-        )
-
-    return Credentials(username=username, password=password)
-
-
 def get_app_token() -> str | None:
     """
     Optional application token used by the gym portal.
@@ -55,4 +33,3 @@ def get_app_token() -> str | None:
     default token observed from the browser will be used.
     """
     return os.getenv(GYM_APP_TOKEN_ENV) or DEFAULT_APP_TOKEN
-
