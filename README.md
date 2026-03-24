@@ -23,10 +23,13 @@ This replaces the FastAPI backend with Supabase Edge Functions + RLS.
 
 2. Configure Supabase secrets for the Edge Functions:
 
-- `SUPABASE_URL`
-- `SUPABASE_ANON_KEY`
 - `ENCRYPTION_KEY` (base64-encoded 32-byte key for AES-GCM)
 - Optional: `GYM_APP_TOKEN` (if the portal token changes)
+
+Note: Supabase automatically provides `SUPABASE_URL`, `SUPABASE_ANON_KEY`,
+`SUPABASE_SERVICE_ROLE_KEY`, and `SUPABASE_DB_URL` to Edge Functions. These
+system secrets appear in the dashboard and cannot be removed, but you do not
+need to add them manually.
 
 3. Deploy Edge Functions from `supabase/functions`:
 
