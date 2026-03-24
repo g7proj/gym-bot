@@ -38,6 +38,17 @@ need to add them manually.
 
 4. Configure frontend env vars (see `C:\projects\gym-bot\web\README.md`).
 
+## GitHub Pages (Production)
+
+Production Pages are built via GitHub Actions (no `docs/` in the repo).
+
+Required repository secrets:
+
+- `REACT_APP_SUPABASE_URL` (production Supabase URL)
+- `REACT_APP_SUPABASE_ANON_KEY` (production publishable key)
+
+In GitHub: Settings → Pages → Source = GitHub Actions.
+
 ## Requirements
 
 - Python 3.11+ in `PATH`
