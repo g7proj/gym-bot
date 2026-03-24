@@ -6,8 +6,8 @@ export function formatLocalIsoSeconds(date: Date): string {
     + `T${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
 }
 
-export function getRollingWeekWindow(days = 7): { start: Date; end: Date } {
-  const start = new Date();
+export function getRollingWeekWindow(days = 7, startDate?: Date): { start: Date; end: Date } {
+  const start = startDate ? new Date(startDate) : new Date();
   start.setHours(0, 0, 0, 0);
   const end = new Date(start);
   end.setDate(end.getDate() + days - 1);
@@ -15,11 +15,11 @@ export function getRollingWeekWindow(days = 7): { start: Date; end: Date } {
   return { start, end };
 }
 
-export function getDailyTimeWindow(): { start: Date; end: Date } {
-  const today = new Date();
-  const start = new Date(today);
+export function getDailyTimeWindow(baseDate?: Date): { start: Date; end: Date } {
+  const day = baseDate ? new Date(baseDate) : new Date();
+  const start = new Date(day);
   start.setHours(7, 0, 0, 0);
-  const end = new Date(today);
+  const end = new Date(day);
   end.setHours(23, 59, 59, 0);
   return { start, end };
 }

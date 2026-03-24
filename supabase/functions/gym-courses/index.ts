@@ -57,8 +57,10 @@ serve(async (req) => {
     const password = await decryptString(userRow.password_encrypted);
     const token = await gymLogin(userRow.username, password);
 
-    const rolling = getRollingWeekWindow(7);
-    const daily = getDailyTimeWindow();
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const rolling = getRollingWeekWindow(7, tomorrow);
+    const daily = getDailyTimeWindow(rolling.start);
 
     const response = await listWithMine(
       token,
@@ -104,4 +106,6 @@ serve(async (req) => {
     });
   }
 });
+
+
 
