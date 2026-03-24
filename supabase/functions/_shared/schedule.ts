@@ -1,13 +1,24 @@
 export const WEEKDAY_EN = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
 
+const DEFAULT_TIMEZONE = 'Europe/Rome';
+
+function nowInTimeZone(timeZone = DEFAULT_TIMEZONE): Date {
+  const locale = new Date().toLocaleString('en-US', { timeZone });
+  return new Date(locale);
+}
+
 export function formatLocalIsoSeconds(date: Date): string {
   const pad = (value: number) => String(value).padStart(2, '0');
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
     + `T${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
 }
 
-export function getRollingWeekWindow(days = 7, startDate?: Date): { start: Date; end: Date } {
-  const start = startDate ? new Date(startDate) : new Date();
+export function getRollingWeekWindow(
+  days = 7,
+  startDate?: Date,
+  timeZone = DEFAULT_TIMEZONE,
+): { start: Date; end: Date } {
+  const start = startDate ? new Date(startDate) : nowInTimeZone(timeZone);
   start.setHours(0, 0, 0, 0);
   const end = new Date(start);
   end.setDate(end.getDate() + days - 1);
@@ -15,8 +26,11 @@ export function getRollingWeekWindow(days = 7, startDate?: Date): { start: Date;
   return { start, end };
 }
 
-export function getDailyTimeWindow(baseDate?: Date): { start: Date; end: Date } {
-  const day = baseDate ? new Date(baseDate) : new Date();
+export function getDailyTimeWindow(
+  baseDate?: Date,
+  timeZone = DEFAULT_TIMEZONE,
+): { start: Date; end: Date } {
+  const day = baseDate ? new Date(baseDate) : nowInTimeZone(timeZone);
   const start = new Date(day);
   start.setHours(7, 0, 0, 0);
   const end = new Date(day);

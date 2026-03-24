@@ -57,10 +57,12 @@ serve(async (req) => {
     const password = await decryptString(userRow.password_encrypted);
     const token = await gymLogin(userRow.username, password);
 
-    const tomorrow = new Date();
+    const timeZone = Deno.env.get('APP_TIMEZONE') || 'Europe/Rome';
+    const nowInTz = new Date(new Date().toLocaleString('en-US', { timeZone }));
+    const tomorrow = new Date(nowInTz);
     tomorrow.setDate(tomorrow.getDate() + 1);
-    const rolling = getRollingWeekWindow(7, tomorrow);
-    const daily = getDailyTimeWindow(rolling.start);
+    const rolling = getRollingWeekWindow(7, tomorrow, timeZone);
+    const daily = getDailyTimeWindow(rolling.start, timeZone);
 
     const response = await listWithMine(
       token,
@@ -106,6 +108,9 @@ serve(async (req) => {
     });
   }
 });
+
+
+
 
 
 
