@@ -70,6 +70,7 @@ function App() {
       }
       const { data, error: invokeError } = await supabase.functions.invoke('gym-login', {
         body: { username, password },
+        headers: { Authorization: `Bearer ${session.access_token}` },
       });
       if (invokeError) {
         throw invokeError;
@@ -122,8 +123,13 @@ function App() {
 
   const loadCourses = async (id) => {
     try {
+      const session = await ensureSession();
+      if (!session?.access_token) {
+        throw new Error('Missing auth session');
+      }
       const { data, error: invokeError } = await supabase.functions.invoke('gym-courses', {
         body: { user_id: id },
+        headers: { Authorization: `Bearer ${session.access_token}` },
       });
       if (invokeError) {
         throw invokeError;
