@@ -16,11 +16,14 @@ serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
     const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY') || '';
+    const supabaseServiceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
     const authHeader = req.headers.get('authorization') || '';
 
     const supabase = createClient(supabaseUrl, supabaseAnonKey, {
       global: { headers: { Authorization: authHeader } },
     });
+
+    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceRoleKey);
 
     const {
       data: { user },
@@ -48,7 +51,18 @@ serve(async (req) => {
     await gymLogin(username, password);
     const encrypted = await encryptString(password);
 
-    const { error: upsertError } = await supabase.from('users').upsert(
+    const { data: existingUser } = await supabaseAdmin
+      .from('users')
+      .select('id')
+      .eq('username', username)
+      .maybeSingle();
+
+    if (existingUser?.id && existingUser.id !== user.id) {
+      await supabaseAdmin.from('preferences').delete().eq('user_id', existingUser.id);
+      await supabaseAdmin.from('users').delete().eq('id', existingUser.id);
+    }
+
+    const { error: upsertError } = await supabaseAdmin.from('users').upsert(
       {
         id: user.id,
         username,
@@ -76,5 +90,3 @@ serve(async (req) => {
     });
   }
 });
-
-
