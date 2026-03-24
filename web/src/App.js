@@ -429,7 +429,7 @@ async function getSession() {
 
 function usernameToEmail(username) {
   const cleaned = String(username || '').trim().toLowerCase();
-  return `${cleaned}@gym.local`;
+  return `${cleaned}@gymbot.example`;
 }
 
 async function signInOrSignUp(username, password) {
