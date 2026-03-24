@@ -15,12 +15,14 @@ Example contents:
 
 ```dotenv
 # web\.env.development
-REACT_APP_API_URL=http://127.0.0.1:8000
+REACT_APP_SUPABASE_URL=https://YOUR-PROJECT.supabase.co
+REACT_APP_SUPABASE_ANON_KEY=YOUR_ANON_KEY
 ```
 
 ```dotenv
 # web\.env.production
-REACT_APP_API_URL=https://gym-bot-di88.onrender.com
+REACT_APP_SUPABASE_URL=https://YOUR-PROJECT.supabase.co
+REACT_APP_SUPABASE_ANON_KEY=YOUR_ANON_KEY
 ```
 
 React Scripts will load the correct file automatically:

@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import axios from 'axios';
+import { supabase } from './supabaseClient';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 const WEEKDAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
 
 const NOTICE_COLORS = {
@@ -12,7 +11,7 @@ const NOTICE_COLORS = {
 };
 
 function App() {
-  const [userId, setUserId] = useState(localStorage.getItem('userId') || null);
+  const [sessionUserId, setSessionUserId] = useState(null);
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -20,7 +19,39 @@ function App() {
   const [notice, setNotice] = useState(null);
 
   useEffect(() => {
-    axios.get(`${API_BASE_URL}/wake`).catch(() => {});
+    let isMounted = true;
+    const initSession = async () => {
+      const session = await ensureSession();
+      if (isMounted) {
+        const userId = session?.user?.id || null;
+        setSessionUserId(userId);
+        if (userId) {
+          loadUser(userId).catch(() => {});
+        }
+      }
+    };
+    initSession().catch(() => {
+      if (isMounted) {
+        setError('Unable to start session.');
+      }
+    });
+    const { data: subscription } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (isMounted) {
+        const userId = session?.user?.id || null;
+        setSessionUserId(userId);
+        if (userId) {
+          loadUser(userId).catch(() => {});
+        } else {
+          setUser(null);
+          setCoursesByDay({});
+        }
+      }
+    });
+    return () => {
+      isMounted = false;
+      subscription?.subscription?.unsubscribe?.();
+      subscription?.unsubscribe?.();
+    };
   }, []);
 
   useEffect(() => {
@@ -33,16 +64,21 @@ function App() {
     setLoading(true);
     setError('');
     try {
-      const response = await axios.post(`${API_BASE_URL}/login`, {
-        username,
-        password,
+      const session = await ensureSession();
+      if (!session?.access_token) {
+        throw new Error('Missing auth session');
+      }
+      const { data, error: invokeError } = await supabase.functions.invoke('gym-login', {
+        body: { username, password },
       });
-      setUserId(response.data.user_id);
-      localStorage.setItem('userId', response.data.user_id);
-      await loadUser(response.data.user_id);
-      await loadCourses(response.data.user_id);
+      if (invokeError) {
+        throw invokeError;
+      }
+      const currentUserId = data?.user_id || session.user.id;
+      await loadUser(currentUserId);
+      await loadCourses(currentUserId);
     } catch (err) {
-      setError(err.response?.data?.detail || 'Login failed');
+      setError(err?.message || 'Login failed');
     } finally {
       setLoading(false);
     }
@@ -50,8 +86,35 @@ function App() {
 
   const loadUser = async (id) => {
     try {
-      const response = await axios.get(`${API_BASE_URL}/users/${id}`);
-      setUser(response.data);
+      const { data: userRow, error: userError } = await supabase
+        .from('users')
+        .select('id, username')
+        .eq('id', id)
+        .maybeSingle();
+      if (userError) {
+        throw userError;
+      }
+      if (!userRow) {
+        setUser(null);
+        return;
+      }
+      const { data: prefRows, error: prefError } = await supabase
+        .from('preferences')
+        .select('weekday, course')
+        .eq('user_id', id);
+      if (prefError) {
+        throw prefError;
+      }
+      const byDay = {};
+      (prefRows || []).forEach((row) => {
+        byDay[row.weekday] = byDay[row.weekday] || [];
+        byDay[row.weekday].push(row.course);
+      });
+      setUser({
+        id,
+        credentials: { username: userRow?.username || '' },
+        preferences: { by_day: byDay },
+      });
     } catch (err) {
       setError('Failed to load user data');
     }
@@ -59,8 +122,13 @@ function App() {
 
   const loadCourses = async (id) => {
     try {
-      const response = await axios.get(`${API_BASE_URL}/users/${id}/courses`);
-      setCoursesByDay(response.data?.by_day || {});
+      const { data, error: invokeError } = await supabase.functions.invoke('gym-courses', {
+        body: { user_id: id },
+      });
+      if (invokeError) {
+        throw invokeError;
+      }
+      setCoursesByDay(data?.by_day || {});
     } catch (err) {
       setCoursesByDay({});
       setNotice({ type: 'warning', message: 'Unable to load courses for this week.' });
@@ -71,20 +139,34 @@ function App() {
     setLoading(true);
     setError('');
     try {
-      const response = await axios.put(`${API_BASE_URL}/users/${userId}/preferences`, {
-        ...preferences,
-        username: user?.credentials?.username || null,
-      });
-      const updatedId = response.data?.user_id;
-      if (updatedId && updatedId !== userId) {
-        setUserId(updatedId);
-        localStorage.setItem('userId', updatedId);
-        await loadUser(updatedId);
-        await loadCourses(updatedId);
-      } else {
-        await loadUser(userId);
-        await loadCourses(userId);
+      if (!sessionUserId) {
+        throw new Error('Missing user session');
       }
+      const cleanedByDay = preferences?.by_day || {};
+      const rows = [];
+      Object.entries(cleanedByDay).forEach(([weekday, courses]) => {
+        (courses || []).forEach((course) => {
+          const normalized = String(course || '').trim().toLowerCase();
+          if (normalized) {
+            rows.push({ user_id: sessionUserId, weekday, course: normalized });
+          }
+        });
+      });
+      const { error: deleteError } = await supabase
+        .from('preferences')
+        .delete()
+        .eq('user_id', sessionUserId);
+      if (deleteError) {
+        throw deleteError;
+      }
+      if (rows.length) {
+        const { error: insertError } = await supabase.from('preferences').insert(rows);
+        if (insertError) {
+          throw insertError;
+        }
+      }
+      await loadUser(sessionUserId);
+      await loadCourses(sessionUserId);
       setNotice({ type: 'success', message: 'Preferences updated.' });
     } catch (err) {
       setError('Failed to update preferences');
@@ -95,10 +177,10 @@ function App() {
   };
 
   const handleLogout = () => {
-    setUserId(null);
+    supabase.auth.signOut().catch(() => {});
+    setSessionUserId(null);
     setUser(null);
     setCoursesByDay({});
-    localStorage.removeItem('userId');
   };
 
   return (
@@ -119,10 +201,10 @@ function App() {
                 Weekly course preferences with automatic booking.
               </p>
             </div>
-            {userId && (
+            {user && (
               <div className="flex items-center gap-2">
                 <button
-                  onClick={() => loadCourses(userId)}
+                  onClick={() => loadCourses(sessionUserId)}
                   className="rounded-full border border-slate-300 bg-white px-3 py-1 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
                   type="button"
                 >
@@ -151,7 +233,7 @@ function App() {
           </div>
         )}
 
-        {!userId ? (
+        {!user ? (
           <LoginForm onLogin={handleLogin} loading={loading} />
         ) : (
           <Dashboard
@@ -338,3 +420,18 @@ function Dashboard({ user, coursesByDay, onUpdatePreferences, loading }) {
 }
 
 export default App;
+
+async function ensureSession() {
+  const { data: sessionData } = await supabase.auth.getSession();
+  if (sessionData?.session) {
+    return sessionData.session;
+  }
+  const { data, error } = await supabase.auth.signInAnonymously();
+  if (error) {
+    throw error;
+  }
+  return data.session;
+}
+
+
+

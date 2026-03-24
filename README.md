@@ -11,6 +11,30 @@ Personal automation for checking available gym courses via the `inforyou.teamsys
 - React frontend for login + preferences management
 - GitHub Actions job for automated daily booking
 
+## Supabase (Edge Functions) Setup (Render-free)
+
+This replaces the FastAPI backend with Supabase Edge Functions + RLS.
+
+1. Create tables + policies in Supabase (SQL editor):
+
+```sql
+-- See db/supabase.sql
+```
+
+2. Configure Supabase secrets for the Edge Functions:
+
+- `SUPABASE_URL`
+- `SUPABASE_ANON_KEY`
+- `ENCRYPTION_KEY` (base64-encoded 32-byte key for AES-GCM)
+- Optional: `GYM_APP_TOKEN` (if the portal token changes)
+
+3. Deploy Edge Functions from `supabase/functions`:
+
+- `gym-login`
+- `gym-courses`
+
+4. Configure frontend env vars (see `C:\projects\gym-bot\web\README.md`).
+
 ## Requirements
 
 - Python 3.11+ in `PATH`
@@ -50,7 +74,7 @@ pip install -r requirements.txt
 This key is required by the API to encrypt/decrypt passwords.
 
 ```powershell
-python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+python -c "import base64, os; print(base64.b64encode(os.urandom(32)).decode())"
 ```
 
 Keep the output, you will use it as `ENCRYPTION_KEY`.
@@ -176,7 +200,7 @@ The project includes `.github/workflows/book.yml` which runs daily at 07:XX Euro
 
 Required secrets:
 
-- `ENCRYPTION_KEY`: Fernet key used to decrypt stored passwords
+- `ENCRYPTION_KEY`: AES-GCM key used to decrypt stored passwords
 - `DATABASE_URL`: Postgres connection string reachable by the runner
 
 The workflow runs `scripts/book_all_users.py`.
