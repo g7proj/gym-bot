@@ -38,6 +38,10 @@ need to add them manually.
 
 4. Configure frontend env vars (see `C:\projects\gym-bot\web\README.md`).
 
+Note: In Supabase Dashboard → Edge Functions, keep "Verify JWT" disabled for
+`gym-login` and `gym-courses`. The functions still validate the token via
+`supabase.auth.getUser()`, but the gateway JWT check is unreliable for this setup.
+
 ## GitHub Pages (Production)
 
 Production Pages are built via GitHub Actions (no `docs/` in the repo).
