@@ -21,13 +21,12 @@ function App() {
   useEffect(() => {
     let isMounted = true;
     const initSession = async () => {
-      const session = await ensureSession();
-      if (isMounted) {
-        const userId = session?.user?.id || null;
-        setSessionUserId(userId);
-        if (userId) {
-          loadUser(userId).catch(() => {});
-        }
+      const session = await getSession();
+      if (!isMounted) return;
+      const userId = session?.user?.id || null;
+      setSessionUserId(userId);
+      if (userId) {
+        loadUser(userId).catch(() => {});
       }
     };
     initSession().catch(() => {
@@ -64,10 +63,8 @@ function App() {
     setLoading(true);
     setError('');
     try {
-      const session = await ensureSession();
-      if (!session?.access_token) {
-        throw new Error('Missing auth session');
-      }
+      const session = await signInOrSignUp(username, password);
+      if (!session?.access_token) throw new Error('Missing auth session');
       const { data, error: invokeError } = await supabase.functions.invoke('gym-login', {
         body: { username, password },
         headers: { Authorization: `Bearer ${session.access_token}` },
@@ -123,10 +120,8 @@ function App() {
 
   const loadCourses = async (id) => {
     try {
-      const session = await ensureSession();
-      if (!session?.access_token) {
-        throw new Error('Missing auth session');
-      }
+      const session = await getSession();
+      if (!session?.access_token) throw new Error('Missing auth session');
       const { data, error: invokeError } = await supabase.functions.invoke('gym-courses', {
         body: { user_id: id },
         headers: { Authorization: `Bearer ${session.access_token}` },
@@ -427,16 +422,45 @@ function Dashboard({ user, coursesByDay, onUpdatePreferences, loading }) {
 
 export default App;
 
-async function ensureSession() {
-  const { data: sessionData } = await supabase.auth.getSession();
-  if (sessionData?.session) {
-    return sessionData.session;
+async function getSession() {
+  const { data } = await supabase.auth.getSession();
+  return data?.session || null;
+}
+
+function usernameToEmail(username) {
+  const cleaned = String(username || '').trim().toLowerCase();
+  return `${cleaned}@gym.local`;
+}
+
+async function signInOrSignUp(username, password) {
+  const email = usernameToEmail(username);
+  const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+    email,
+    password,
+  });
+  if (!signInError && signInData?.session) {
+    return signInData.session;
   }
-  const { data, error } = await supabase.auth.signInAnonymously();
-  if (error) {
-    throw error;
+
+  const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+    email,
+    password,
+  });
+  if (signUpError && signUpError.message !== 'User already registered') {
+    throw signUpError;
   }
-  return data.session;
+  if (signUpData?.session) {
+    return signUpData.session;
+  }
+
+  const { data: retryData, error: retryError } = await supabase.auth.signInWithPassword({
+    email,
+    password,
+  });
+  if (retryError) {
+    throw retryError;
+  }
+  return retryData.session;
 }
 
 
