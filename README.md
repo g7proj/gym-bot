@@ -103,7 +103,7 @@ Create a `.env` file in the project root (only needed for the booking script if 
 
 ```dotenv
 ENCRYPTION_KEY=your_generated_key_here
-DATABASE_URL=your_supabase_connection_string
+DATABASE_URL=your_database_connection_string
 ```
 
 If the gym changes the app token, you can optionally add:
@@ -112,7 +112,33 @@ If the gym changes the app token, you can optionally add:
 GYM_APP_TOKEN=APP_TOKEN_VALUE_FROM_PORTAL
 ```
 
-### 5. (Optional) Run the React Frontend
+### 5. (Optional) Use Local Postgres (Docker)
+
+If you want to test the booking script locally with Postgres, you can run a local DB:
+
+```powershell
+docker run --name gym-bot-db -e POSTGRES_PASSWORD=postgres -e POSTGRES_USER=postgres -e POSTGRES_DB=gym_bot -p 5432:5432 -d postgres:16
+```
+
+Initialize the schema:
+
+```powershell
+Get-Content db\schema.sql | docker exec -i gym-bot-db psql -U postgres -d gym_bot
+```
+
+If the container already exists, just start it:
+
+```powershell
+docker start gym-bot-db
+```
+
+Use this connection string in your `.env`:
+
+```dotenv
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/gym_bot
+```
+
+### 6. (Optional) Run the React Frontend
 
 ```powershell
 cd web
