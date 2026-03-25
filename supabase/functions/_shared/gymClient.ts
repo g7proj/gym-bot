@@ -98,3 +98,42 @@ export async function listWithMine(
 
   return response.json();
 }
+
+async function postBooking(
+  token: string,
+  endpoint: string,
+  payload: Record<string, unknown>,
+): Promise<any> {
+  const appToken = getAppToken();
+  const response = await fetch(`${BASE_URL}/webbooking/${endpoint}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      AppToken: appToken,
+      IYESUrl: IYES_URL,
+      AuthToken: token,
+      Cookie: buildCookie(appToken, token),
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`${endpoint} failed with HTTP ${response.status}: ${text}`);
+  }
+
+  const data = await response.json();
+  if (!data?.Successful) {
+    const message = data?.ErrorMessage || data?.Comment || 'Unknown error';
+    throw new Error(`${endpoint} not successful: ${message}`);
+  }
+  return data;
+}
+
+export async function bookLesson(token: string, payload: Record<string, unknown>): Promise<any> {
+  return postBooking(token, 'book', payload);
+}
+
+export async function addWait(token: string, payload: Record<string, unknown>): Promise<any> {
+  return postBooking(token, 'AddWait', payload);
+}

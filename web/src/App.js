@@ -201,6 +201,37 @@ function App() {
     });
   };
 
+  const handleBooking = async (item) => {
+    return runWithPending(async () => {
+      try {
+        const session = await getSession();
+        if (!session?.access_token) throw new Error('Missing auth session');
+        const { error: invokeError } = await supabase.functions.invoke('gym-book', {
+          body: {
+            idService: item.idService,
+            idLesson: item.idLesson,
+            startTime: item.startTime,
+            endTime: item.endTime,
+            type: 0,
+            idDurata: 0,
+            bookNr: 0,
+            availablePlaces: item.availablePlaces,
+            isUserPresent: item.isUserPresent,
+            waitingListPosition: item.waitingListPosition,
+          },
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        });
+        if (invokeError) {
+          throw invokeError;
+        }
+        setNotice({ type: 'success', message: 'Booking request sent.' });
+        await loadCalendar();
+      } catch (err) {
+        setNotice({ type: 'error', message: err?.message || 'Booking failed.' });
+      }
+    });
+  };
+
   const updatePreferences = async (preferences) => {
     setLoading(true);
     setError('');
@@ -338,6 +369,7 @@ function App() {
             selectedDate={selectedDate}
             onSelectDate={setSelectedDate}
             onRefresh={loadCalendar}
+            onBook={handleBooking}
           />
         )}
       </div>
@@ -527,7 +559,7 @@ function Dashboard({ user, coursesByDay, onUpdatePreferences, loading }) {
   );
 }
 
-function CalendarView({ days, meta, selectedDate, onSelectDate, onRefresh }) {
+function CalendarView({ days, meta, selectedDate, onSelectDate, onRefresh, onBook }) {
   const hasDays = Array.isArray(days) && days.length > 0;
   const groupedDays = useMemo(() => (Array.isArray(days) ? days : []), [days]);
   const itemsByDate = useMemo(() => {
@@ -628,10 +660,7 @@ function CalendarView({ days, meta, selectedDate, onSelectDate, onRefresh }) {
                       }
                       const items = itemsByDate[date] || [];
                       const booked = items.some((item) => item.isUserPresent);
-                      const waitPositions = items
-                        .map((item) => item.waitingListPosition)
-                        .filter((value) => Number(value) > 0);
-                      const waitPosition = waitPositions.length ? Math.min(...waitPositions) : null;
+                      const hasWaitingList = items.some((item) => Number(item.waitingListPosition) > 0);
                       const hasItems = items.length > 0;
                       const isSelected = selectedDate === date;
                       return (
@@ -651,7 +680,7 @@ function CalendarView({ days, meta, selectedDate, onSelectDate, onRefresh }) {
                             <div className="text-[12px] font-semibold">{formatDay(date)}</div>
                             <div className="flex flex-col items-center gap-1 text-[9px] font-semibold">
                               {booked && <span className="text-emerald-200">Booked</span>}
-                              {waitPosition ? <span className="text-amber-200">WL #{waitPosition}</span> : null}
+                              {hasWaitingList ? <span className="text-amber-200">WL</span> : null}
                             </div>
                           </div>
                         </button>
@@ -691,12 +720,22 @@ function CalendarView({ days, meta, selectedDate, onSelectDate, onRefresh }) {
                   ) : null}
                   {item.waitingListPosition > 0 ? (
                     <span className="rounded-full bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-700">
-                      WL #{item.waitingListPosition}
+                      WL
                     </span>
                   ) : null}
+                  {!item.isUserPresent && item.waitingListPosition <= 0 && (
+                    <button
+                      type="button"
+                      onClick={() => onBook(item)}
+                      className="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold text-white shadow-sm hover:bg-slate-800"
+                    >
+                      {item.availablePlaces > 0 ? 'Book' : 'Join waitlist'}
+                    </button>
+                  )}
                 </div>
               </div>
-            ))}
+            ))
+            }
             {selectedDate && selectedItems.length === 0 && (
               <div className="text-sm text-slate-500">No courses available.</div>
             )}

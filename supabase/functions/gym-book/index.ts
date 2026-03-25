@@ -1,0 +1,104 @@
+import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { decryptString } from '../_shared/crypto.ts';
+import { addWait, bookLesson, gymLogin } from '../_shared/gymClient.ts';
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
+
+serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders });
+  }
+
+  try {
+    const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY') || '';
+    const authHeader = req.headers.get('authorization') || '';
+
+    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } },
+    });
+
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
+
+    if (userError || !user) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    const { data: userRow, error: userRowError } = await supabase
+      .from('users')
+      .select('username, password_encrypted')
+      .eq('id', user.id)
+      .single();
+
+    if (userRowError || !userRow?.password_encrypted) {
+      return new Response(JSON.stringify({ error: 'User credentials not found' }), {
+        status: 404,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    const body = await req.json();
+    const idService = Number(body?.idService);
+    const idLesson = Number(body?.idLesson);
+    const startTime = String(body?.startTime || '').trim();
+    const endTime = String(body?.endTime || '').trim();
+    const type = Number.isFinite(body?.type) ? Number(body.type) : 0;
+    const idDurata = Number.isFinite(body?.idDurata) ? Number(body.idDurata) : 0;
+    const bookNr = Number.isFinite(body?.bookNr) ? Number(body.bookNr) : 0;
+    const availablePlaces = Number(body?.availablePlaces ?? 0);
+    const waitingListPosition = Number(body?.waitingListPosition ?? 0);
+    const isUserPresent = Boolean(body?.isUserPresent);
+
+    if (!idService || !idLesson || !startTime || !endTime) {
+      return new Response(JSON.stringify({ error: 'Missing booking fields' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    if (isUserPresent || waitingListPosition > 0) {
+      return new Response(JSON.stringify({ error: 'Already booked or in waiting list' }), {
+        status: 409,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    const password = await decryptString(userRow.password_encrypted);
+    const token = await gymLogin(userRow.username, password);
+
+    const payload = {
+      Note: '',
+      BookNr: bookNr,
+      BookingID: idService,
+      StartTime: startTime,
+      EndTime: endTime,
+      IDLesson: idLesson,
+      Type: type,
+      IDDurata: idDurata,
+    };
+
+    const response = availablePlaces > 0
+      ? await bookLesson(token, payload)
+      : await addWait(token, payload);
+
+    return new Response(JSON.stringify({ success: true, response }), {
+      status: 200,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  } catch (err) {
+    return new Response(JSON.stringify({ error: err?.message || 'Unexpected error' }), {
+      status: 500,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+});
