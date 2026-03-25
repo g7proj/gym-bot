@@ -76,6 +76,8 @@ serve(async (req) => {
     const byDay: Record<string, string[]> = {};
 
     items.forEach((item: any) => {
+      const category = String(item?.CategoryDescription || '').trim();
+      if (category !== 'CORSI FIT') return;
       const dateLessonStr = item?.DateLesson;
       const serviceDesc = String(item?.ServiceDescription || '').trim();
       if (!dateLessonStr || !serviceDesc) return;
@@ -108,9 +110,3 @@ serve(async (req) => {
     });
   }
 });
-
-
-
-
-
-

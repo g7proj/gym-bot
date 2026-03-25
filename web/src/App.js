@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { supabase } from './supabaseClient';
 
 const WEEKDAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+const WEEKDAY_LABELS = ['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom'];
+const MONTH_LABELS = ['Gen', 'Feb', 'Mar', 'Apr', 'Mag', 'Giu', 'Lug', 'Ago', 'Set', 'Ott', 'Nov', 'Dic'];
 
 const NOTICE_COLORS = {
   success: 'bg-emerald-600',
@@ -23,6 +25,8 @@ function App() {
   const [error, setError] = useState('');
   const [coursesByDay, setCoursesByDay] = useState({});
   const [calendarDays, setCalendarDays] = useState([]);
+  const [calendarMeta, setCalendarMeta] = useState({ startDate: null, endDate: null });
+  const [selectedDate, setSelectedDate] = useState(null);
   const [notice, setNotice] = useState(null);
   const [activeTab, setActiveTab] = useState('preferences');
 
@@ -63,6 +67,7 @@ function App() {
           setUser(null);
           setCoursesByDay({});
           setCalendarDays([]);
+          setCalendarMeta({ startDate: null, endDate: null });
         }
       }
     });
@@ -180,9 +185,17 @@ function App() {
         if (invokeError) {
           throw invokeError;
         }
-        setCalendarDays(Array.isArray(data?.days) ? data.days : []);
+        const days = Array.isArray(data?.days) ? data.days : [];
+        setCalendarDays(days);
+        const startDate = data?.start_date || null;
+        const endDate = data?.end_date || null;
+        setCalendarMeta({ startDate, endDate });
+        if (startDate && (!selectedDate || selectedDate < startDate || selectedDate > endDate)) {
+          setSelectedDate(startDate);
+        }
       } catch (err) {
         setCalendarDays([]);
+        setCalendarMeta({ startDate: null, endDate: null });
         setNotice({ type: 'warning', message: 'Unable to load the calendar.' });
       }
     });
@@ -237,6 +250,7 @@ function App() {
     setUser(null);
     setCoursesByDay({});
     setCalendarDays([]);
+    setCalendarMeta({ startDate: null, endDate: null });
   };
 
   return (
@@ -318,7 +332,13 @@ function App() {
             loading={loading}
           />
         ) : (
-          <CalendarView days={calendarDays} onRefresh={loadCalendar} />
+          <CalendarView
+            days={calendarDays}
+            meta={calendarMeta}
+            selectedDate={selectedDate}
+            onSelectDate={setSelectedDate}
+            onRefresh={loadCalendar}
+          />
         )}
       </div>
     </div>
@@ -507,16 +527,61 @@ function Dashboard({ user, coursesByDay, onUpdatePreferences, loading }) {
   );
 }
 
-function CalendarView({ days, onRefresh }) {
+function CalendarView({ days, meta, selectedDate, onSelectDate, onRefresh }) {
   const hasDays = Array.isArray(days) && days.length > 0;
   const groupedDays = useMemo(() => (Array.isArray(days) ? days : []), [days]);
+  const itemsByDate = useMemo(() => {
+    const map = {};
+    groupedDays.forEach((day) => {
+      map[day.date] = day.items || [];
+    });
+    return map;
+  }, [groupedDays]);
+
+  const dateList = useMemo(() => {
+    if (!meta?.startDate || !meta?.endDate) return [];
+    const start = new Date(`${meta.startDate}T00:00:00`);
+    const end = new Date(`${meta.endDate}T00:00:00`);
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return [];
+    const list = [];
+    const current = new Date(start);
+    while (current <= end) {
+      list.push(current.toISOString().slice(0, 10));
+      current.setDate(current.getDate() + 1);
+    }
+    return list;
+  }, [meta]);
+
+  const monthGroups = useMemo(() => {
+    if (!dateList.length) return [];
+    const groups = [];
+    let currentLabel = null;
+    let currentDates = [];
+    dateList.forEach((date) => {
+      const label = monthLabel(date);
+      if (label !== currentLabel) {
+        if (currentDates.length) {
+          groups.push({ label: currentLabel, dates: currentDates });
+        }
+        currentLabel = label;
+        currentDates = [];
+      }
+      currentDates.push(date);
+    });
+    if (currentDates.length) {
+      groups.push({ label: currentLabel, dates: currentDates });
+    }
+    return groups;
+  }, [dateList]);
+
+  const selectedItems = selectedDate ? itemsByDate[selectedDate] || [] : [];
 
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
       <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
           <h2 className="text-lg font-semibold">Bookable calendar</h2>
-          <p className="text-sm text-slate-600">Next 20 days of bookable classes.</p>
+          <p className="text-sm text-slate-600">This month and next month at a glance.</p>
         </div>
         <button
           type="button"
@@ -533,51 +598,146 @@ function CalendarView({ days, onRefresh }) {
         </div>
       )}
 
-      <div className="space-y-4">
-        {groupedDays.map((day) => (
-          <div key={day.date} className="rounded-xl border border-slate-200 bg-slate-50/60 p-4">
-            <div className="mb-3 text-sm font-semibold text-slate-700">{day.date}</div>
-            <div className="space-y-2">
-              {(day.items || []).map((item) => (
-                <div
-                  key={`${item.idLesson}-${item.startTime}`}
-                  className="flex flex-col gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm md:flex-row md:items-center md:justify-between"
-                >
-                  <div>
-                    <div className="font-semibold text-slate-800">{item.service}</div>
-                    <div className="text-xs text-slate-500">
-                      {item.category} · {item.startTime}–{item.endTime}
-                    </div>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="rounded-full bg-slate-100 px-2 py-1 text-xs text-slate-600">
-                      Seats: {item.availablePlaces}
-                    </span>
-                    {item.isUserPresent ? (
-                      <span className="rounded-full bg-emerald-100 px-2 py-1 text-xs font-semibold text-emerald-700">
-                        Booked
-                      </span>
-                    ) : null}
-                    {item.waitingListPosition > 0 ? (
-                      <span className="rounded-full bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-700">
-                        WL #{item.waitingListPosition}
-                      </span>
-                    ) : null}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
+        <div className="space-y-6">
+          {monthGroups.map((group) => {
+            const dates = group.dates;
+            const firstDay = new Date(`${dates[0]}T00:00:00`);
+            const jsDay = firstDay.getDay();
+            const mondayIndex = (jsDay + 6) % 7;
+            const blanks = Array.from({ length: mondayIndex }, () => null);
+            const calendarCells = [...blanks, ...dates];
+
+            return (
+              <div key={group.label} className="flex gap-4">
+                <div className="flex w-10 items-center justify-center">
+                  <div className="rotate-180 text-xs font-semibold uppercase tracking-widest text-slate-400 [writing-mode:vertical-rl]">
+                    {group.label}
                   </div>
                 </div>
-              ))}
-              {(day.items || []).length === 0 && (
-                <div className="text-sm text-slate-500">No courses available.</div>
-              )}
-            </div>
+                <div className="flex-1">
+                  <div className="grid grid-cols-7 gap-2 text-center text-xs font-semibold text-slate-500">
+                    {WEEKDAY_LABELS.map((label) => (
+                      <div key={`${group.label}-${label}`}>{label}</div>
+                    ))}
+                  </div>
+                  <div className="mt-2 grid grid-cols-7 gap-2">
+                    {calendarCells.map((date, index) => {
+                      if (!date) {
+                        return <div key={`empty-${group.label}-${index}`} className="h-14 rounded-lg border border-transparent" />;
+                      }
+                      const items = itemsByDate[date] || [];
+                      const booked = items.some((item) => item.isUserPresent);
+                      const waitPositions = items
+                        .map((item) => item.waitingListPosition)
+                        .filter((value) => Number(value) > 0);
+                      const waitPosition = waitPositions.length ? Math.min(...waitPositions) : null;
+                      const hasItems = items.length > 0;
+                      const isSelected = selectedDate === date;
+                      return (
+                        <button
+                          key={date}
+                          type="button"
+                          onClick={() => onSelectDate(date)}
+                          className={`h-14 rounded-lg border px-2 py-2 text-xs font-medium transition ${
+                            isSelected
+                              ? 'border-slate-900 bg-slate-900 text-white'
+                              : hasItems
+                                ? 'border-slate-200 bg-white text-slate-700 hover:border-slate-400'
+                                : 'border-slate-200 bg-slate-100 text-slate-400'
+                          }`}
+                        >
+                          <div className="flex h-full flex-col items-center justify-center gap-1 text-center leading-none">
+                            <div className="text-[12px] font-semibold">{formatDay(date)}</div>
+                            <div className="flex flex-col items-center gap-1 text-[9px] font-semibold">
+                              {booked && <span className="text-emerald-200">Booked</span>}
+                              {waitPosition ? <span className="text-amber-200">WL #{waitPosition}</span> : null}
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-4">
+          <div className="mb-3 text-sm font-semibold text-slate-700">
+            {selectedDate ? `${formatShortDate(selectedDate)} · ${weekdayLabel(selectedDate)}` : 'Select a date'}
           </div>
-        ))}
+          <div className="space-y-2">
+            {selectedItems.map((item) => (
+              <div
+                key={`${item.idLesson}-${item.startTime}`}
+                className="flex flex-col gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm md:flex-row md:items-center md:justify-between"
+              >
+                <div>
+                  <div className="font-semibold text-slate-800">{item.service}</div>
+                  <div className="text-xs text-slate-500">
+                    {item.category} · {item.startTime}–{item.endTime}
+                  </div>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="rounded-full bg-slate-100 px-2 py-1 text-xs text-slate-600">
+                    Seats: {item.availablePlaces}
+                  </span>
+                  {item.isUserPresent ? (
+                    <span className="rounded-full bg-emerald-100 px-2 py-1 text-xs font-semibold text-emerald-700">
+                      Booked
+                    </span>
+                  ) : null}
+                  {item.waitingListPosition > 0 ? (
+                    <span className="rounded-full bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-700">
+                      WL #{item.waitingListPosition}
+                    </span>
+                  ) : null}
+                </div>
+              </div>
+            ))}
+            {selectedDate && selectedItems.length === 0 && (
+              <div className="text-sm text-slate-500">No courses available.</div>
+            )}
+            {!selectedDate && (
+              <div className="text-sm text-slate-500">Pick a day to see the lessons.</div>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );
 }
 
 export default App;
+
+function formatShortDate(dateStr) {
+  const [year, month, day] = dateStr.split('-');
+  if (!year || !month || !day) return dateStr;
+  return `${day}/${month}/${year.slice(2)}`;
+}
+
+function formatDay(dateStr) {
+  const parts = dateStr.split('-');
+  if (parts.length !== 3) return dateStr;
+  return String(Number(parts[2]));
+}
+
+function monthLabel(dateStr) {
+  const parts = dateStr.split('-');
+  if (parts.length !== 3) return dateStr;
+  const month = MONTH_LABELS[Number(parts[1]) - 1] || parts[1];
+  return `${month} ${parts[0]}`;
+}
+
+function weekdayLabel(dateStr) {
+  const date = new Date(`${dateStr}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return '';
+  const jsDay = date.getDay();
+  const mondayIndex = (jsDay + 6) % 7;
+  return WEEKDAY_LABELS[mondayIndex] || '';
+}
 
 async function getSession() {
   const { data } = await supabase.auth.getSession();

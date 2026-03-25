@@ -2,12 +2,19 @@ import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { decryptString } from '../_shared/crypto.ts';
 import { gymLogin, listWithMine } from '../_shared/gymClient.ts';
-import { formatLocalIsoSeconds, getDailyTimeWindow, getRollingWeekWindow } from '../_shared/schedule.ts';
+import { formatLocalIsoSeconds, getDailyTimeWindow } from '../_shared/schedule.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
+
+function getMonthRange(timeZone: string): { start: Date; end: Date } {
+  const now = new Date(new Date().toLocaleString('en-US', { timeZone }));
+  const start = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+  const end = new Date(now.getFullYear(), now.getMonth() + 2, 0, 23, 59, 59, 0);
+  return { start, end };
+}
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -52,16 +59,13 @@ serve(async (req) => {
     const token = await gymLogin(userRow.username, password);
 
     const timeZone = Deno.env.get('APP_TIMEZONE') || 'Europe/Rome';
-    const nowInTz = new Date(new Date().toLocaleString('en-US', { timeZone }));
-    const startDate = new Date(nowInTz);
-    startDate.setHours(0, 0, 0, 0);
-    const rolling = getRollingWeekWindow(20, startDate, timeZone);
-    const daily = getDailyTimeWindow(rolling.start, timeZone);
+    const range = getMonthRange(timeZone);
+    const daily = getDailyTimeWindow(range.start, timeZone);
 
     const response = await listWithMine(
       token,
-      formatLocalIsoSeconds(rolling.start),
-      formatLocalIsoSeconds(rolling.end),
+      formatLocalIsoSeconds(range.start),
+      formatLocalIsoSeconds(range.end),
       formatLocalIsoSeconds(daily.start),
       formatLocalIsoSeconds(daily.end),
     );
@@ -70,6 +74,8 @@ serve(async (req) => {
     const byDate: Record<string, any[]> = {};
 
     items.forEach((item: any) => {
+      const category = String(item?.CategoryDescription || '').trim();
+      if (category !== 'CORSI FIT') return;
       const dateLessonStr = String(item?.DateLesson || '').trim();
       const serviceDesc = String(item?.ServiceDescription || '').trim();
       if (!dateLessonStr || !serviceDesc) return;
@@ -85,7 +91,7 @@ serve(async (req) => {
         startTime,
         endTime,
         service: serviceDesc,
-        category: String(item?.CategoryDescription || '').trim(),
+        category,
         availablePlaces: Number(item?.AvailablePlaces ?? 0),
         isUserPresent: Number(item?.IsUserPresent ?? 0) === 1,
         waitingListPosition: Number(item?.UserPositionWaitingList ?? 0),
@@ -108,8 +114,8 @@ serve(async (req) => {
       }));
 
     return new Response(JSON.stringify({
-      start_date: formatLocalIsoSeconds(rolling.start).slice(0, 10),
-      end_date: formatLocalIsoSeconds(rolling.end).slice(0, 10),
+      start_date: formatLocalIsoSeconds(range.start).slice(0, 10),
+      end_date: formatLocalIsoSeconds(range.end).slice(0, 10),
       days,
     }), {
       status: 200,
