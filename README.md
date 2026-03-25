@@ -161,6 +161,14 @@ To stop the local stack:
 .\scripts\dev-stop.ps1
 ```
 
+Ignored local files (recreated by scripts/CLI):
+
+- `C:\projects\gym-bot\.env.local` (local secrets cache)
+- `C:\projects\gym-bot\web\.env.development`
+- `C:\projects\gym-bot\supabase\.branches\`
+- `C:\projects\gym-bot\supabase\.temp\`
+- `C:\projects\gym-bot\web\supabase\`
+
 ### 7. (Optional) Run the React Frontend
 
 ```powershell
