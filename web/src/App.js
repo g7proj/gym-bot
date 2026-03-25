@@ -772,7 +772,8 @@ function CalendarView({ days, meta, myBookings, selectedDate, onSelectDate, onRe
                       }
                       const items = visibleItemsByDate[date] || [];
                       const booked = items.some((item) => item.isUserPresent);
-                      const hasWaitingList = items.some((item) => Number(item.waitingListPosition) > 0);
+                      const waitingListItem = items.find((item) => Number(item.waitingListPosition) > 0);
+                      const hasWaitingList = Boolean(waitingListItem);
                       const hasItems = items.length > 0;
                       const isSelected = selectedDate === date;
                       return (
@@ -792,7 +793,13 @@ function CalendarView({ days, meta, myBookings, selectedDate, onSelectDate, onRe
                             <div className="text-[12px] font-semibold">{formatDay(date)}</div>
                             <div className="flex flex-col items-center gap-1 text-[9px] font-semibold">
                               {booked && <span className="text-emerald-200">Booked</span>}
-                              {hasWaitingList ? <span className="text-amber-200">WL</span> : null}
+                              {hasWaitingList ? (
+                                <span className="text-amber-200">
+                                  {showWaitlistPosition && waitingListItem
+                                    ? `WL #${waitingListItem.waitingListPosition}`
+                                    : 'WL'}
+                                </span>
+                              ) : null}
                             </div>
                           </div>
                         </button>
@@ -901,9 +908,12 @@ function weekdayLabel(dateStr) {
 
 function bookingKey(item) {
   const service = String(item?.service || '').toLowerCase();
-  const start = String(item?.startTime || '');
-  const end = String(item?.endTime || '');
-  return `${service}|${start}|${end}`;
+  const date = String(item?.date || '');
+  const startRaw = String(item?.startTime || '');
+  const endRaw = String(item?.endTime || '');
+  const start = startRaw.includes('T') ? startRaw.slice(11, 16) : startRaw;
+  const end = endRaw.includes('T') ? endRaw.slice(11, 16) : endRaw;
+  return `${date}|${service}|${start}|${end}`;
 }
 
 async function getSession() {
