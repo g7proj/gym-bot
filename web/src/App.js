@@ -231,6 +231,7 @@ function App() {
           body: {
             idService: item.idService,
             idLesson: item.idLesson,
+            date: item.date,
             startTime: item.startTime,
             endTime: item.endTime,
             type: 0,
@@ -265,6 +266,7 @@ function App() {
             idLesson: item.idLesson,
             type: item.type ?? 0,
             idDurata: item.idDurata ?? 0,
+            date: item.date,
             startTime: item.startTime,
             endTime: item.endTime,
             isUserPresent: item.isUserPresent,

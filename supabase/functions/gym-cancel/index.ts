@@ -50,12 +50,14 @@ serve(async (req) => {
     const body = await req.json();
     const bookingId = Number(body?.bookingId);
     const idLesson = Number(body?.idLesson ?? 0);
-    const startTime = String(body?.startTime || '').trim();
-    const endTime = String(body?.endTime || '').trim();
+    const date = String(body?.date || '').trim();
+    const startTimeRaw = String(body?.startTime || '').trim();
+    const endTimeRaw = String(body?.endTime || '').trim();
+    const startTime = startTimeRaw.includes('T') ? startTimeRaw : (date ? ${date}T:00 : startTimeRaw);
+    const endTime = endTimeRaw.includes('T') ? endTimeRaw : (date ? ${date}T:00 : endTimeRaw);
     const type = Number.isFinite(body?.type) ? Number(body.type) : 0;
     const idDurata = Number.isFinite(body?.idDurata) ? Number(body.idDurata) : 0;
     const isUserPresent = Boolean(body?.isUserPresent);
-    const waitingListPosition = Number(body?.waitingListPosition ?? 0);
 
     if (!bookingId || !startTime || !endTime) {
       return new Response(JSON.stringify({ error: 'Missing cancel fields' }), {
