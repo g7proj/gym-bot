@@ -99,6 +99,30 @@ export async function listWithMine(
   return response.json();
 }
 
+export async function myBookings(token: string): Promise<any> {
+  const appToken = getAppToken();
+  const url = new URL(`${BASE_URL}/webbooking/mybooks`);
+  url.searchParams.set('companyID', String(COMPANY_ID));
+  url.searchParams.set('Type', '');
+
+  const response = await fetch(url.toString(), {
+    method: 'GET',
+    headers: {
+      AppToken: appToken,
+      IYESUrl: IYES_URL,
+      AuthToken: token,
+      Cookie: buildCookie(appToken, token),
+    },
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`mybooks failed with HTTP ${response.status}: ${text}`);
+  }
+
+  return response.json();
+}
+
 async function postBooking(
   token: string,
   endpoint: string,
@@ -136,4 +160,12 @@ export async function bookLesson(token: string, payload: Record<string, unknown>
 
 export async function addWait(token: string, payload: Record<string, unknown>): Promise<any> {
   return postBooking(token, 'AddWait', payload);
+}
+
+export async function cancelBooking(token: string, payload: Record<string, unknown>): Promise<any> {
+  return postBooking(token, 'cancel', payload);
+}
+
+export async function removeWait(token: string, payload: Record<string, unknown>): Promise<any> {
+  return postBooking(token, 'RemoveWait', payload);
 }

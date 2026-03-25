@@ -27,6 +27,7 @@ function App() {
   const [calendarDays, setCalendarDays] = useState([]);
   const [calendarMeta, setCalendarMeta] = useState({ startDate: null, endDate: null });
   const [selectedDate, setSelectedDate] = useState(null);
+  const [myBookings, setMyBookings] = useState([]);
   const [notice, setNotice] = useState(null);
   const [activeTab, setActiveTab] = useState('preferences');
 
@@ -88,6 +89,7 @@ function App() {
     if (!user?.id) return;
     if (activeTab === 'calendar') {
       loadCalendar().catch(() => {});
+      loadMyBookings().catch(() => {});
     }
   }, [activeTab, user?.id]);
 
@@ -201,6 +203,25 @@ function App() {
     });
   };
 
+  const loadMyBookings = async () => {
+    return runWithPending(async () => {
+      try {
+        const session = await getSession();
+        if (!session?.access_token) throw new Error('Missing auth session');
+        const { data, error: invokeError } = await supabase.functions.invoke('gym-mybooks', {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        });
+        if (invokeError) {
+          throw invokeError;
+        }
+        setMyBookings(Array.isArray(data?.items) ? data.items : []);
+      } catch (err) {
+        setMyBookings([]);
+        setNotice({ type: 'warning', message: 'Unable to load your bookings.' });
+      }
+    });
+  };
+
   const handleBooking = async (item) => {
     return runWithPending(async () => {
       try {
@@ -226,10 +247,45 @@ function App() {
         }
         setNotice({ type: 'success', message: 'Booking request sent.' });
         await loadCalendar();
+        await loadMyBookings();
       } catch (err) {
         setNotice({ type: 'error', message: err?.message || 'Booking failed.' });
       }
     });
+  };
+
+  const handleCancel = async (item) => {
+    return runWithPending(async () => {
+      try {
+        const session = await getSession();
+        if (!session?.access_token) throw new Error('Missing auth session');
+        const { error: invokeError } = await supabase.functions.invoke('gym-cancel', {
+          body: {
+            bookingId: item.bookingId,
+            idLesson: item.idLesson,
+            type: item.type ?? 0,
+            idDurata: item.idDurata ?? 0,
+            startTime: item.startTime,
+            endTime: item.endTime,
+            isUserPresent: item.isUserPresent,
+          },
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        });
+        if (invokeError) {
+          throw invokeError;
+        }
+        setNotice({ type: 'success', message: 'Booking removed.' });
+        await loadCalendar();
+        await loadMyBookings();
+      } catch (err) {
+        setNotice({ type: 'error', message: err?.message || 'Unable to cancel booking.' });
+      }
+    });
+  };
+
+  const refreshCalendar = async () => {
+    await loadCalendar();
+    await loadMyBookings();
   };
 
   const updatePreferences = async (preferences) => {
@@ -282,6 +338,7 @@ function App() {
     setCoursesByDay({});
     setCalendarDays([]);
     setCalendarMeta({ startDate: null, endDate: null });
+    setMyBookings([]);
   };
 
   return (
@@ -366,10 +423,12 @@ function App() {
           <CalendarView
             days={calendarDays}
             meta={calendarMeta}
+            myBookings={myBookings}
             selectedDate={selectedDate}
             onSelectDate={setSelectedDate}
-            onRefresh={loadCalendar}
+            onRefresh={refreshCalendar}
             onBook={handleBooking}
+            onCancel={handleCancel}
           />
         )}
       </div>
@@ -559,16 +618,46 @@ function Dashboard({ user, coursesByDay, onUpdatePreferences, loading }) {
   );
 }
 
-function CalendarView({ days, meta, selectedDate, onSelectDate, onRefresh, onBook }) {
+function CalendarView({ days, meta, myBookings, selectedDate, onSelectDate, onRefresh, onBook, onCancel }) {
   const hasDays = Array.isArray(days) && days.length > 0;
+  const [calendarFilter, setCalendarFilter] = useState('all');
   const groupedDays = useMemo(() => (Array.isArray(days) ? days : []), [days]);
+  const myBookingsByKey = useMemo(() => {
+    const map = new Map();
+    (myBookings || []).forEach((item) => {
+      map.set(bookingKey(item), item);
+    });
+    return map;
+  }, [myBookings]);
   const itemsByDate = useMemo(() => {
     const map = {};
     groupedDays.forEach((day) => {
-      map[day.date] = day.items || [];
+      map[day.date] = (day.items || []).map((item) => {
+        const match = myBookingsByKey.get(bookingKey(item));
+        if (!match) return item;
+        return {
+          ...item,
+          bookingId: match.bookingId,
+          idLesson: match.idLesson || item.idLesson,
+          type: match.type ?? item.type,
+          idDurata: match.idDurata ?? item.idDurata,
+          isUserPresent: match.isUserPresent,
+          waitingListPosition: match.waitingListPosition ?? item.waitingListPosition,
+        };
+      });
     });
     return map;
-  }, [groupedDays]);
+  }, [groupedDays, myBookingsByKey]);
+  const visibleItemsByDate = useMemo(() => {
+    if (calendarFilter === 'all') return itemsByDate;
+    const map = {};
+    Object.entries(itemsByDate).forEach(([date, items]) => {
+      map[date] = (items || []).filter(
+        (item) => item.isUserPresent || Number(item.waitingListPosition) > 0
+      );
+    });
+    return map;
+  }, [itemsByDate, calendarFilter]);
 
   const dateList = useMemo(() => {
     if (!meta?.startDate || !meta?.endDate) return [];
@@ -606,7 +695,7 @@ function CalendarView({ days, meta, selectedDate, onSelectDate, onRefresh, onBoo
     return groups;
   }, [dateList]);
 
-  const selectedItems = selectedDate ? itemsByDate[selectedDate] || [] : [];
+  const selectedItems = selectedDate ? visibleItemsByDate[selectedDate] || [] : [];
 
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -615,13 +704,35 @@ function CalendarView({ days, meta, selectedDate, onSelectDate, onRefresh, onBoo
           <h2 className="text-lg font-semibold">Bookable calendar</h2>
           <p className="text-sm text-slate-600">This month and next month at a glance.</p>
         </div>
-        <button
-          type="button"
-          onClick={onRefresh}
-          className="rounded-full border border-slate-300 bg-white px-3 py-1 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
-        >
-          Refresh calendar
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-2 rounded-full border border-slate-200 bg-slate-100 px-2 py-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+            <button
+              type="button"
+              onClick={() => setCalendarFilter('all')}
+              className={`rounded-full px-3 py-1 text-[11px] font-semibold ${
+                calendarFilter === 'all' ? 'bg-white text-slate-700 shadow' : 'text-slate-500'
+              }`}
+            >
+              All
+            </button>
+            <button
+              type="button"
+              onClick={() => setCalendarFilter('mine')}
+              className={`rounded-full px-3 py-1 text-[11px] font-semibold ${
+                calendarFilter === 'mine' ? 'bg-white text-slate-700 shadow' : 'text-slate-500'
+              }`}
+            >
+              My bookings
+            </button>
+          </div>
+          <button
+            type="button"
+            onClick={onRefresh}
+            className="rounded-full border border-slate-300 bg-white px-3 py-1 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
+          >
+            Refresh calendar
+          </button>
+        </div>
       </div>
 
       {!hasDays && (
@@ -658,7 +769,7 @@ function CalendarView({ days, meta, selectedDate, onSelectDate, onRefresh, onBoo
                       if (!date) {
                         return <div key={`empty-${group.label}-${index}`} className="h-14 rounded-lg border border-transparent" />;
                       }
-                      const items = itemsByDate[date] || [];
+                      const items = visibleItemsByDate[date] || [];
                       const booked = items.some((item) => item.isUserPresent);
                       const hasWaitingList = items.some((item) => Number(item.waitingListPosition) > 0);
                       const hasItems = items.length > 0;
@@ -695,7 +806,7 @@ function CalendarView({ days, meta, selectedDate, onSelectDate, onRefresh, onBoo
 
         <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-4">
           <div className="mb-3 text-sm font-semibold text-slate-700">
-            {selectedDate ? `${formatShortDate(selectedDate)} · ${weekdayLabel(selectedDate)}` : 'Select a date'}
+            {selectedDate ? `${formatShortDate(selectedDate)} ï¿½ ${weekdayLabel(selectedDate)}` : 'Select a date'}
           </div>
           <div className="space-y-2">
             {selectedItems.map((item) => (
@@ -706,7 +817,7 @@ function CalendarView({ days, meta, selectedDate, onSelectDate, onRefresh, onBoo
                 <div>
                   <div className="font-semibold text-slate-800">{item.service}</div>
                   <div className="text-xs text-slate-500">
-                    {item.category} · {item.startTime}–{item.endTime}
+                    {item.category} ï¿½ {item.startTime}ï¿½{item.endTime}
                   </div>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
@@ -722,6 +833,15 @@ function CalendarView({ days, meta, selectedDate, onSelectDate, onRefresh, onBoo
                     <span className="rounded-full bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-700">
                       WL
                     </span>
+                  ) : null}
+                  {item.bookingId ? (
+                    <button
+                      type="button"
+                      onClick={() => onCancel(item)}
+                      className="rounded-full border border-rose-200 bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-100"
+                    >
+                      Cancel
+                    </button>
                   ) : null}
                   {!item.isUserPresent && item.waitingListPosition <= 0 && (
                     <button
@@ -776,6 +896,13 @@ function weekdayLabel(dateStr) {
   const jsDay = date.getDay();
   const mondayIndex = (jsDay + 6) % 7;
   return WEEKDAY_LABELS[mondayIndex] || '';
+}
+
+function bookingKey(item) {
+  const service = String(item?.service || '').toLowerCase();
+  const start = String(item?.startTime || '');
+  const end = String(item?.endTime || '');
+  return `${service}|${start}|${end}`;
 }
 
 async function getSession() {
