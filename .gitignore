@@ -31,6 +31,8 @@ dist/
 .env
 *.local.*
 data/users.json
+.env.local
+web/.env.development
 
 # Node.js
 node_modules/
@@ -40,3 +42,6 @@ yarn-error.log*
 
 # Local Supabase edge runtime secrets
 supabase/.env
+supabase/.branches/
+supabase/.temp/
+web/supabase/
