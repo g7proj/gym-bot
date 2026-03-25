@@ -621,6 +621,7 @@ function Dashboard({ user, coursesByDay, onUpdatePreferences, loading }) {
 function CalendarView({ days, meta, myBookings, selectedDate, onSelectDate, onRefresh, onBook, onCancel }) {
   const hasDays = Array.isArray(days) && days.length > 0;
   const [calendarFilter, setCalendarFilter] = useState('all');
+  const showWaitlistPosition = calendarFilter === 'mine';
   const groupedDays = useMemo(() => (Array.isArray(days) ? days : []), [days]);
   const myBookingsByKey = useMemo(() => {
     const map = new Map();
@@ -831,7 +832,7 @@ function CalendarView({ days, meta, myBookings, selectedDate, onSelectDate, onRe
                   ) : null}
                   {item.waitingListPosition > 0 ? (
                     <span className="rounded-full bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-700">
-                      WL
+                      {showWaitlistPosition ? `WL #${item.waitingListPosition}` : 'WL'}
                     </span>
                   ) : null}
                   {item.bookingId ? (

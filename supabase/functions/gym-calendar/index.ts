@@ -9,11 +9,12 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-function getMonthRange(timeZone: string): { start: Date; end: Date } {
+function getMonthRange(timeZone: string): { start: Date; end: Date; currentEnd: Date } {
   const now = new Date(new Date().toLocaleString('en-US', { timeZone }));
   const start = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+  const currentEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 0);
   const end = new Date(now.getFullYear(), now.getMonth() + 2, 0, 23, 59, 59, 0);
-  return { start, end };
+  return { start, end, currentEnd };
 }
 
 serve(async (req) => {
@@ -72,6 +73,7 @@ serve(async (req) => {
 
     const items = Array.isArray(response?.Items) ? response.Items : [];
     const byDate: Record<string, any[]> = {};
+    let maxDate = '';
 
     items.forEach((item: any) => {
       const category = String(item?.CategoryDescription || '').trim();
@@ -81,6 +83,9 @@ serve(async (req) => {
       if (!dateLessonStr || !serviceDesc) return;
 
       const dateKey = dateLessonStr.slice(0, 10);
+      if (!maxDate || dateKey > maxDate) {
+        maxDate = dateKey;
+      }
       const startTime = String(item?.StartTime || '').slice(11, 16);
       const endTime = String(item?.EndTime || '').slice(11, 16);
 
@@ -113,9 +118,15 @@ serve(async (req) => {
         items: byDate[date].sort((a, b) => String(a.startTime).localeCompare(String(b.startTime))),
       }));
 
+    let endDate = formatLocalIsoSeconds(range.currentEnd).slice(0, 10);
+    if (maxDate) {
+      const currentEndStr = formatLocalIsoSeconds(range.currentEnd).slice(0, 10);
+      endDate = maxDate > currentEndStr ? maxDate : currentEndStr;
+    }
+
     return new Response(JSON.stringify({
       start_date: formatLocalIsoSeconds(range.start).slice(0, 10),
-      end_date: formatLocalIsoSeconds(range.end).slice(0, 10),
+      end_date: endDate,
       days,
     }), {
       status: 200,
