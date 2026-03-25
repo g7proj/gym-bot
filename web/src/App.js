@@ -14,9 +14,21 @@ function App() {
   const [sessionUserId, setSessionUserId] = useState(null);
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [pendingCount, setPendingCount] = useState(0);
   const [error, setError] = useState('');
   const [coursesByDay, setCoursesByDay] = useState({});
   const [notice, setNotice] = useState(null);
+
+  const isBusy = pendingCount > 0;
+
+  const runWithPending = async (fn) => {
+    setPendingCount((count) => count + 1);
+    try {
+      return await fn();
+    } finally {
+      setPendingCount((count) => Math.max(0, count - 1));
+    }
+  };
 
   useEffect(() => {
     let isMounted = true;
@@ -63,18 +75,20 @@ function App() {
     setLoading(true);
     setError('');
     try {
-      const session = await signInOrSignUp(username, password);
-      if (!session?.access_token) throw new Error('Missing auth session');
-      const { data, error: invokeError } = await supabase.functions.invoke('gym-login', {
-        body: { username, password },
-        headers: { Authorization: `Bearer ${session.access_token}` },
+      await runWithPending(async () => {
+        const session = await signInOrSignUp(username, password);
+        if (!session?.access_token) throw new Error('Missing auth session');
+        const { data, error: invokeError } = await supabase.functions.invoke('gym-login', {
+          body: { username, password },
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        });
+        if (invokeError) {
+          throw invokeError;
+        }
+        const currentUserId = data?.user_id || session.user.id;
+        await loadUser(currentUserId);
+        await loadCourses(currentUserId);
       });
-      if (invokeError) {
-        throw invokeError;
-      }
-      const currentUserId = data?.user_id || session.user.id;
-      await loadUser(currentUserId);
-      await loadCourses(currentUserId);
     } catch (err) {
       setError(err?.message || 'Login failed');
     } finally {
@@ -83,92 +97,98 @@ function App() {
   };
 
   const loadUser = async (id) => {
-    try {
-      const { data: userRow, error: userError } = await supabase
-        .from('users')
-        .select('id, username')
-        .eq('id', id)
-        .maybeSingle();
-      if (userError) {
-        throw userError;
+    return runWithPending(async () => {
+      try {
+        const { data: userRow, error: userError } = await supabase
+          .from('users')
+          .select('id, username')
+          .eq('id', id)
+          .maybeSingle();
+        if (userError) {
+          throw userError;
+        }
+        if (!userRow) {
+          setUser(null);
+          return;
+        }
+        const { data: prefRows, error: prefError } = await supabase
+          .from('preferences')
+          .select('weekday, course')
+          .eq('user_id', id);
+        if (prefError) {
+          throw prefError;
+        }
+        const byDay = {};
+        (prefRows || []).forEach((row) => {
+          byDay[row.weekday] = byDay[row.weekday] || [];
+          byDay[row.weekday].push(row.course);
+        });
+        setUser({
+          id,
+          credentials: { username: userRow?.username || '' },
+          preferences: { by_day: byDay },
+        });
+      } catch (err) {
+        setError('Failed to load user data');
       }
-      if (!userRow) {
-        setUser(null);
-        return;
-      }
-      const { data: prefRows, error: prefError } = await supabase
-        .from('preferences')
-        .select('weekday, course')
-        .eq('user_id', id);
-      if (prefError) {
-        throw prefError;
-      }
-      const byDay = {};
-      (prefRows || []).forEach((row) => {
-        byDay[row.weekday] = byDay[row.weekday] || [];
-        byDay[row.weekday].push(row.course);
-      });
-      setUser({
-        id,
-        credentials: { username: userRow?.username || '' },
-        preferences: { by_day: byDay },
-      });
-    } catch (err) {
-      setError('Failed to load user data');
-    }
+    });
   };
 
   const loadCourses = async (id) => {
-    try {
-      const session = await getSession();
-      if (!session?.access_token) throw new Error('Missing auth session');
-      const { data, error: invokeError } = await supabase.functions.invoke('gym-courses', {
-        body: { user_id: id },
-        headers: { Authorization: `Bearer ${session.access_token}` },
-      });
-      if (invokeError) {
-        throw invokeError;
+    return runWithPending(async () => {
+      try {
+        const session = await getSession();
+        if (!session?.access_token) throw new Error('Missing auth session');
+        const { data, error: invokeError } = await supabase.functions.invoke('gym-courses', {
+          body: { user_id: id },
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        });
+        if (invokeError) {
+          throw invokeError;
+        }
+        setCoursesByDay(data?.by_day || {});
+      } catch (err) {
+        setCoursesByDay({});
+        setNotice({ type: 'warning', message: 'Unable to load courses for this week.' });
       }
-      setCoursesByDay(data?.by_day || {});
-    } catch (err) {
-      setCoursesByDay({});
-      setNotice({ type: 'warning', message: 'Unable to load courses for this week.' });
-    }
+    });
   };
 
   const updatePreferences = async (preferences) => {
     setLoading(true);
     setError('');
     try {
-      if (!sessionUserId) {
-        throw new Error('Missing user session');
-      }
-      const cleanedByDay = preferences?.by_day || {};
-      const rows = [];
-      Object.entries(cleanedByDay).forEach(([weekday, courses]) => {
-        (courses || []).forEach((course) => {
-          const normalized = String(course || '').trim().toLowerCase();
-          if (normalized) {
-            rows.push({ user_id: sessionUserId, weekday, course: normalized });
-          }
-        });
-      });
-      const { error: deleteError } = await supabase
-        .from('preferences')
-        .delete()
-        .eq('user_id', sessionUserId);
-      if (deleteError) {
-        throw deleteError;
-      }
-      if (rows.length) {
-        const { error: insertError } = await supabase.from('preferences').insert(rows);
-        if (insertError) {
-          throw insertError;
+      await runWithPending(async () => {
+        if (!sessionUserId) {
+          throw new Error('Missing user session');
         }
-      }
-      await loadUser(sessionUserId);
-      await loadCourses(sessionUserId);
-      setNotice({ type: 'success', message: 'Preferences updated.' });
+        const cleanedByDay = preferences?.by_day || {};
+        const rows = [];
+        Object.entries(cleanedByDay).forEach(([weekday, courses]) => {
+          (courses || []).forEach((course) => {
+            const normalized = String(course || '').trim().toLowerCase();
+            if (normalized) {
+              rows.push({ user_id: sessionUserId, weekday, course: normalized });
+            }
+          });
+        });
+        const { error: deleteError } = await supabase
+          .from('preferences')
+          .delete()
+          .eq('user_id', sessionUserId);
+        if (deleteError) {
+          throw deleteError;
+        }
+        if (rows.length) {
+          const { error: insertError } = await supabase.from('preferences').insert(rows);
+          if (insertError) {
+            throw insertError;
+          }
+        }
+        await loadUser(sessionUserId);
+        await loadCourses(sessionUserId);
+        setNotice({ type: 'success', message: 'Preferences updated.' });
+      });
     } catch (err) {
       setError('Failed to update preferences');
       setNotice({ type: 'error', message: 'Failed to update preferences.' });
@@ -186,6 +206,7 @@ function App() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-50 via-white to-slate-100 text-slate-900">
+      {isBusy && <LoadingOverlay />}
       {notice && (
         <div
           className={`fixed bottom-4 left-1/2 z-50 -translate-x-1/2 text-white px-4 py-2 rounded-full shadow-lg ${NOTICE_COLORS[notice.type]}`}
@@ -244,6 +265,17 @@ function App() {
             loading={loading}
           />
         )}
+      </div>
+    </div>
+  );
+}
+
+function LoadingOverlay() {
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center bg-white/70 backdrop-blur-sm">
+      <div className="flex flex-col items-center gap-3 rounded-2xl border border-slate-200 bg-white px-6 py-4 shadow-lg">
+        <div className="h-10 w-10 animate-spin rounded-full border-4 border-slate-200 border-t-slate-900" />
+        <div className="text-sm font-medium text-slate-700">Loading...</div>
       </div>
     </div>
   );
@@ -462,6 +494,3 @@ async function signInOrSignUp(username, password) {
   }
   return retryData.session;
 }
-
-
-
