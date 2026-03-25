@@ -38,7 +38,7 @@ need to add them manually.
 
 4. Configure frontend env vars (see `C:\projects\gym-bot\web\README.md`).
 
-Note: In Supabase Dashboard → Edge Functions, keep "Verify JWT" disabled for
+Note: In Supabase Dashboard -> Edge Functions, keep "Verify JWT" disabled for
 `gym-login` and `gym-courses`. The functions still validate the token via
 `supabase.auth.getUser()`, but the gateway JWT check is unreliable for this setup.
 
@@ -51,7 +51,7 @@ Required repository secrets:
 - `REACT_APP_SUPABASE_URL` (production Supabase URL)
 - `REACT_APP_SUPABASE_ANON_KEY` (production publishable key)
 
-In GitHub: Settings → Pages → Source = GitHub Actions.
+In GitHub: Settings -> Pages -> Source = GitHub Actions.
 
 ## Requirements
 
@@ -138,18 +138,37 @@ Use this connection string in your `.env`:
 DATABASE_URL=postgresql://postgres:postgres@localhost:5432/gym_bot
 ```
 
-### 6. (Optional) Run the React Frontend
+### 6. Local Supabase Dev (Recommended for UI testing)
+
+This starts the full Supabase stack locally (Auth + DB + Edge Functions).
+
+```powershell
+.\scripts\dev-start.ps1
+```
+
+The script will:
+
+- start Supabase locally (Docker)
+- write `supabase\.env` and `supabase\functions\.env` (UTF-8, no BOM) with `ENCRYPTION_KEY` + optional `GYM_APP_TOKEN`
+- set `web\.env.development` with local URL + publishable key
+- reset the local database schema
+
+If you see `failed to parse environment file: .env` during startup, delete `supabase\.env` and rerun the script.
+
+To stop the local stack:
+
+```powershell
+.\scripts\dev-stop.ps1
+```
+
+### 7. (Optional) Run the React Frontend
 
 ```powershell
 cd web
 npm install
 ```
 
-Create `web\.env`:
-
-```
-REACT_APP_API_URL=http://127.0.0.1:8000
-```
+The script writes `web\.env.development` with the local Supabase URL and publishable key.
 
 Start the frontend:
 
@@ -175,7 +194,6 @@ The workflow runs `scripts/book_all_users.py`.
 - `src/gym_bot/client.py`: HTTP calls (login, lessons, booking)
 - `src/gym_bot/config.py`: credentials + token config
 - `src/gym_bot/schedule.py`: time windows and filters
-- `api/main.py`: FastAPI app and endpoints
 - `api/storage.py`: Postgres storage layer
 - `scripts/book_all_users.py`: GitHub Actions job
 
