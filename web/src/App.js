@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import { supabase } from './supabaseClient';
 
 const WEEKDAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
@@ -33,92 +33,16 @@ function App() {
 
   const isBusy = pendingCount > 0;
 
-  const runWithPending = async (fn) => {
+  const runWithPending = useCallback(async (fn) => {
     setPendingCount((count) => count + 1);
     try {
       return await fn();
     } finally {
       setPendingCount((count) => Math.max(0, count - 1));
     }
-  };
-
-  useEffect(() => {
-    let isMounted = true;
-    const initSession = async () => {
-      const session = await getSession();
-      if (!isMounted) return;
-      const userId = session?.user?.id || null;
-      setSessionUserId(userId);
-      if (userId) {
-        loadUser(userId).catch(() => {});
-      }
-    };
-    initSession().catch(() => {
-      if (isMounted) {
-        setError('Unable to start session.');
-      }
-    });
-    const { data: subscription } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (isMounted) {
-        const userId = session?.user?.id || null;
-        setSessionUserId(userId);
-        if (userId) {
-          loadUser(userId).catch(() => {});
-        } else {
-          setUser(null);
-          setCoursesByDay({});
-          setCalendarDays([]);
-          setCalendarMeta({ startDate: null, endDate: null });
-        }
-      }
-    });
-    return () => {
-      isMounted = false;
-      subscription?.subscription?.unsubscribe?.();
-      subscription?.unsubscribe?.();
-    };
   }, []);
 
-  useEffect(() => {
-    if (!notice) return;
-    const timer = setTimeout(() => setNotice(null), 3500);
-    return () => clearTimeout(timer);
-  }, [notice]);
-
-  useEffect(() => {
-    if (!user?.id) return;
-    if (activeTab === 'calendar') {
-      loadCalendar().catch(() => {});
-      loadMyBookings().catch(() => {});
-    }
-  }, [activeTab, user?.id]);
-
-  const handleLogin = async (username, password) => {
-    setLoading(true);
-    setError('');
-    try {
-      await runWithPending(async () => {
-        const session = await signInOrSignUp(username, password);
-        if (!session?.access_token) throw new Error('Missing auth session');
-        const { data, error: invokeError } = await supabase.functions.invoke('gym-login', {
-          body: { username, password },
-          headers: { Authorization: `Bearer ${session.access_token}` },
-        });
-        if (invokeError) {
-          throw invokeError;
-        }
-        const currentUserId = data?.user_id || session.user.id;
-        await loadUser(currentUserId);
-        await loadCourses(currentUserId);
-      });
-    } catch (err) {
-      setError(err?.message || 'Login failed');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadUser = async (id) => {
+  const loadUser = useCallback(async (id) => {
     return runWithPending(async () => {
       try {
         const { data: userRow, error: userError } = await supabase
@@ -154,7 +78,7 @@ function App() {
         setError('Failed to load user data');
       }
     });
-  };
+  }, [runWithPending]);
 
   const loadCourses = async (id) => {
     return runWithPending(async () => {
@@ -176,7 +100,32 @@ function App() {
     });
   };
 
-  const loadCalendar = async () => {
+  const handleLogin = async (username, password) => {
+    setLoading(true);
+    setError('');
+    try {
+      await runWithPending(async () => {
+        const session = await signInOrSignUp(username, password);
+        if (!session?.access_token) throw new Error('Missing auth session');
+        const { data, error: invokeError } = await supabase.functions.invoke('gym-login', {
+          body: { username, password },
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        });
+        if (invokeError) {
+          throw invokeError;
+        }
+        const currentUserId = data?.user_id || session.user.id;
+        await loadUser(currentUserId);
+        await loadCourses(currentUserId);
+      });
+    } catch (err) {
+      setError(err?.message || 'Login failed');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadCalendar = useCallback(async () => {
     return runWithPending(async () => {
       try {
         const session = await getSession();
@@ -201,9 +150,9 @@ function App() {
         setNotice({ type: 'warning', message: 'Unable to load the calendar.' });
       }
     });
-  };
+  }, [runWithPending, selectedDate]);
 
-  const loadMyBookings = async () => {
+  const loadMyBookings = useCallback(async () => {
     return runWithPending(async () => {
       try {
         const session = await getSession();
@@ -220,7 +169,7 @@ function App() {
         setNotice({ type: 'warning', message: 'Unable to load your bookings.' });
       }
     });
-  };
+  }, [runWithPending]);
 
   const handleBooking = async (item) => {
     return runWithPending(async () => {
@@ -342,6 +291,57 @@ function App() {
     setCalendarMeta({ startDate: null, endDate: null });
     setMyBookings([]);
   };
+
+  useEffect(() => {
+    let isMounted = true;
+    const initSession = async () => {
+      const session = await getSession();
+      if (!isMounted) return;
+      const userId = session?.user?.id || null;
+      setSessionUserId(userId);
+      if (userId) {
+        loadUser(userId).catch(() => {});
+      }
+    };
+    initSession().catch(() => {
+      if (isMounted) {
+        setError('Unable to start session.');
+      }
+    });
+    const { data: subscription } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (isMounted) {
+        const userId = session?.user?.id || null;
+        setSessionUserId(userId);
+        if (userId) {
+          loadUser(userId).catch(() => {});
+        } else {
+          setUser(null);
+          setCoursesByDay({});
+          setCalendarDays([]);
+          setCalendarMeta({ startDate: null, endDate: null });
+        }
+      }
+    });
+    return () => {
+      isMounted = false;
+      subscription?.subscription?.unsubscribe?.();
+      subscription?.unsubscribe?.();
+    };
+  }, [loadUser]);
+
+  useEffect(() => {
+    if (!notice) return;
+    const timer = setTimeout(() => setNotice(null), 3500);
+    return () => clearTimeout(timer);
+  }, [notice]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    if (activeTab === 'calendar') {
+      loadCalendar().catch(() => {});
+      loadMyBookings().catch(() => {});
+    }
+  }, [activeTab, user?.id, loadCalendar, loadMyBookings]);
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-50 via-white to-slate-100 text-slate-900">
