@@ -53,8 +53,15 @@ serve(async (req) => {
     const date = String(body?.date || '').trim();
     const startTimeRaw = String(body?.startTime || '').trim();
     const endTimeRaw = String(body?.endTime || '').trim();
-    const startTime = startTimeRaw.includes('T') ? startTimeRaw : (date ? ${date}T:00 : startTimeRaw);
-    const endTime = endTimeRaw.includes('T') ? endTimeRaw : (date ? ${date}T:00 : endTimeRaw);
+    const startTime =
+      startTimeRaw.includes('T')
+        ? startTimeRaw
+        : (date ? `${date}T${startTimeRaw}:00` : startTimeRaw);
+
+    const endTime =
+      endTimeRaw.includes('T')
+        ? endTimeRaw
+        : (date ? `${date}T${endTimeRaw}:00` : endTimeRaw);
     const type = Number.isFinite(body?.type) ? Number(body.type) : 0;
     const idDurata = Number.isFinite(body?.idDurata) ? Number(body.idDurata) : 0;
     const bookNr = Number.isFinite(body?.bookNr) ? Number(body.bookNr) : 0;
