@@ -23,9 +23,9 @@ def should_run_now() -> bool:
 
 
 def main() -> None:
-    # if not should_run_now():
-    #     print("Skipping run: not 07:XX Europe/Rome.")
-    #     return
+    if not should_run_now():
+        print("Skipping run: not 07:XX Europe/Rome.")
+        return
 
     storage = UserStorage()
     users = storage.list_users()
@@ -39,9 +39,7 @@ def main() -> None:
         try:
             print(f"Decrypting credentials for user {user.id}")
             print(f"User {user.id} has username: {user.credentials.username}")
-            print(f"User {user.id} has encrypted password: {user.credentials.password}")
             password = crypto.decrypt(user.credentials.password)
-            print(f"Decrypted password for user {user.id}: {password}")
             print(f"Creating credentials object for user {user.id}")
             credentials = Credentials(
                 username=user.credentials.username,
