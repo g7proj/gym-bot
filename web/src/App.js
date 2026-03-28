@@ -2,8 +2,8 @@ import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import { supabase } from './supabaseClient';
 
 const WEEKDAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
-const WEEKDAY_LABELS = ['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom'];
-const MONTH_LABELS = ['Gen', 'Feb', 'Mar', 'Apr', 'Mag', 'Giu', 'Lug', 'Ago', 'Set', 'Ott', 'Nov', 'Dic'];
+const WEEKDAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const MONTH_LABELS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 const NOTICE_COLORS = {
   success: 'bg-emerald-600',
@@ -666,6 +666,9 @@ function CalendarView({ days, meta, myBookings, selectedDate, onSelectDate, onRe
     if (!meta?.startDate || !meta?.endDate) return [];
     const start = new Date(`${meta.startDate}T00:00:00`);
     const end = new Date(`${meta.endDate}T00:00:00`);
+    // Pick the last day of the end date month
+    end.setMonth(end.getMonth() + 1);
+    end.setDate(0); // Set to the last day of the month
     if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return [];
     const list = [];
     const current = new Date(start);
