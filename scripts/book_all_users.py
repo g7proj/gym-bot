@@ -23,9 +23,9 @@ def should_run_now() -> bool:
 
 
 def main() -> None:
-    if not should_run_now():
-        print("Skipping run: not 07:XX Europe/Rome.")
-        return
+    # if not should_run_now():
+    #     print("Skipping run: not 07:XX Europe/Rome.")
+    #     return
 
     storage = UserStorage()
     users = storage.list_users()
@@ -37,18 +37,25 @@ def main() -> None:
     for user in users:
         print(f"Processing user {user.id}")
         try:
+            print(f"Decrypting credentials for user {user.id}")
+            print(f"User {user.id} has username: {user.credentials.username}")
+            print(f"User {user.id} has encrypted password: {user.credentials.password}")
             password = crypto.decrypt(user.credentials.password)
+            print(f"Decrypted password for user {user.id}: {password}")
+            print(f"Creating credentials object for user {user.id}")
             credentials = Credentials(
                 username=user.credentials.username,
                 password=password,
             )
 
+            print(f"Logging in for user {user.id}")
             client = GymClient()
             client.login(credentials)
 
             start_dt, end_dt = schedule.get_booking_window()
             time_start_dt, time_end_dt = schedule.get_daily_time_window()
 
+            print(f"Fetching available lessons for user {user.id}")
             response = client.list_with_mine(
                 start_date=start_dt.isoformat(timespec="seconds"),
                 end_date=end_dt.isoformat(timespec="seconds"),
@@ -104,6 +111,7 @@ def main() -> None:
                 start_datetime = schedule.datetime.combine(lesson_date, start_time_obj)
                 end_datetime = schedule.datetime.combine(lesson_date, end_time_obj)
 
+                print(f"Attempting to book lesson {lesson.get('IDLesson')} for user {user.id} on {start_datetime}")
                 book_response = client.book(
                     booking_id=lesson["IDServizio"],
                     start_time=start_datetime.isoformat(timespec="seconds"),
