@@ -1,3 +1,4 @@
+// API client for the external gym booking system.
 const BASE_URL = 'https://inforyou.teamsystem.com/dream/api/v1';
 const COMPANY_ID = 2;
 const DEFAULT_APP_TOKEN = (
@@ -8,12 +9,15 @@ const DEFAULT_APP_TOKEN = (
   + '3BC3562938747973A156F24F2D4B9EA201FE499C3BC2BF714251A9CE099BD052'
 );
 
+// Legacy host required by the provider.
 const IYES_URL = 'http://95.130.140.135:65432';
 
+// Prefer env token so we can rotate without code changes.
 function getAppToken(): string {
   return Deno.env.get('GYM_APP_TOKEN') || DEFAULT_APP_TOKEN;
 }
 
+// The API expects app-token and auth data in cookies, not just headers.
 function buildCookie(appToken: string, authToken?: string): string {
   const parts = [
     `app-token=${appToken}`,
@@ -28,6 +32,7 @@ function buildCookie(appToken: string, authToken?: string): string {
   return parts.join('; ');
 }
 
+// Authenticate and return the session token used by all booking endpoints.
 export async function gymLogin(username: string, password: string): Promise<string> {
   const appToken = getAppToken();
   const loginUrl = new URL(`${BASE_URL}/security/webauthenticate`);
@@ -64,6 +69,7 @@ export async function gymLogin(username: string, password: string): Promise<stri
   return data.Item;
 }
 
+// List classes and the user's bookings in a date/time window.
 export async function listWithMine(
   token: string,
   startDate: string,
@@ -99,6 +105,7 @@ export async function listWithMine(
   return response.json();
 }
 
+// Fetch all current bookings for the authenticated user.
 export async function myBookings(token: string): Promise<any> {
   const appToken = getAppToken();
   const url = new URL(`${BASE_URL}/webbooking/mybooks`);
@@ -123,6 +130,7 @@ export async function myBookings(token: string): Promise<any> {
   return response.json();
 }
 
+// Shared helper for booking, waitlist, and cancel endpoints.
 async function postBooking(
   token: string,
   endpoint: string,
@@ -154,18 +162,22 @@ async function postBooking(
   return data;
 }
 
+// Confirm a booking with the gym API.
 export async function bookLesson(token: string, payload: Record<string, unknown>): Promise<any> {
   return postBooking(token, 'book', payload);
 }
 
+// Add the user to the waitlist when no places are available.
 export async function addWait(token: string, payload: Record<string, unknown>): Promise<any> {
   return postBooking(token, 'AddWait', payload);
 }
 
+// Cancel a confirmed booking.
 export async function cancelBooking(token: string, payload: Record<string, unknown>): Promise<any> {
   return postBooking(token, 'cancel', payload);
 }
 
+// Remove the user from the waitlist.
 export async function removeWait(token: string, payload: Record<string, unknown>): Promise<any> {
   return postBooking(token, 'RemoveWait', payload);
 }

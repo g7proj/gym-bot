@@ -8,6 +8,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Validate gym credentials and store them encrypted for the logged-in user.
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -23,6 +24,7 @@ serve(async (req) => {
       global: { headers: { Authorization: authHeader } },
     });
 
+    // Service role is required to upsert and clean up other users' rows.
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceRoleKey);
 
     const {
@@ -48,9 +50,11 @@ serve(async (req) => {
       });
     }
 
+    // Only persist credentials after a successful gym login.
     await gymLogin(username, password);
     const encrypted = await encryptString(password);
 
+    // Enforce unique username by removing any older account record.
     const { data: existingUser } = await supabaseAdmin
       .from('users')
       .select('id')

@@ -9,6 +9,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Build a date range: current month + next month for calendar view.
 function getMonthRange(timeZone: string): { start: Date; end: Date; currentEnd: Date } {
   const now = new Date(new Date().toLocaleString('en-US', { timeZone }));
   const start = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
@@ -17,6 +18,7 @@ function getMonthRange(timeZone: string): { start: Date; end: Date; currentEnd: 
   return { start, end, currentEnd };
 }
 
+// Return a calendar-like list of bookable classes grouped by date.
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -77,6 +79,7 @@ serve(async (req) => {
 
     items.forEach((item: any) => {
       const category = String(item?.CategoryDescription || '').trim();
+      // Only return fitness classes, not other booking categories.
       if (category !== 'CORSI FIT') return;
       const dateLessonStr = String(item?.DateLesson || '').trim();
       const serviceDesc = String(item?.ServiceDescription || '').trim();
@@ -118,6 +121,7 @@ serve(async (req) => {
         items: byDate[date].sort((a, b) => String(a.startTime).localeCompare(String(b.startTime))),
       }));
 
+    // Extend end_date if the API returns dates beyond the current month.
     let endDate = formatLocalIsoSeconds(range.currentEnd).slice(0, 10);
     if (maxDate) {
       const currentEndStr = formatLocalIsoSeconds(range.currentEnd).slice(0, 10);

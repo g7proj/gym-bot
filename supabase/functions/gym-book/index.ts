@@ -8,6 +8,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Book a class or place the user in the waitlist depending on availability.
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -22,6 +23,7 @@ serve(async (req) => {
       global: { headers: { Authorization: authHeader } },
     });
 
+    // The request must be authenticated with Supabase auth.
     const {
       data: { user },
       error: userError,
@@ -34,6 +36,7 @@ serve(async (req) => {
       });
     }
 
+    // Load encrypted gym credentials from the users table.
     const { data: userRow, error: userRowError } = await supabase
       .from('users')
       .select('username, password_encrypted')
@@ -53,6 +56,7 @@ serve(async (req) => {
     const date = String(body?.date || '').trim();
     const startTimeRaw = String(body?.startTime || '').trim();
     const endTimeRaw = String(body?.endTime || '').trim();
+    // Accept either full ISO timestamps or date + time fragments.
     const startTime =
       startTimeRaw.includes('T')
         ? startTimeRaw
@@ -76,6 +80,7 @@ serve(async (req) => {
       });
     }
 
+    // Avoid duplicate bookings or waitlist entries from the UI.
     if (isUserPresent || waitingListPosition > 0) {
       return new Response(JSON.stringify({ error: 'Already booked or in waiting list' }), {
         status: 409,
@@ -97,6 +102,7 @@ serve(async (req) => {
       IDDurata: idDurata,
     };
 
+    // If no slots are available, fall back to waitlist.
     const response = availablePlaces > 0
       ? await bookLesson(token, payload)
       : await addWait(token, payload);

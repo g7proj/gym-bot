@@ -8,6 +8,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Cancel a booking or remove the user from the waitlist.
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -53,6 +54,7 @@ serve(async (req) => {
     const date = String(body?.date || '').trim();
     const startTimeRaw = String(body?.startTime || '').trim();
     const endTimeRaw = String(body?.endTime || '').trim();
+    // Support both ISO timestamps and date + time fragments from the UI.
     const startTime =
       startTimeRaw.includes('T')
         ? startTimeRaw
@@ -85,6 +87,7 @@ serve(async (req) => {
       IDDurata: idDurata,
     };
 
+    // If the user isn't confirmed, canceling means removing from the waitlist.
     const response = isUserPresent
       ? await cancelBooking(token, payload)
       : await removeWait(token, payload);

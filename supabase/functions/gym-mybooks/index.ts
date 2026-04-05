@@ -8,6 +8,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Return the user's current bookings in a normalized, UI-friendly format.
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -54,6 +55,7 @@ serve(async (req) => {
     const items = Array.isArray(response?.Items) ? response.Items : [];
 
     const normalized = items
+      // Ignore non-fitness categories to keep the UI focused.
       .filter((item) => String(item?.CategoryDescription || '').trim() === 'CORSI FIT')
       .map((item) => ({
         bookingId: item?.BookingID ?? null,

@@ -15,6 +15,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Return distinct course names grouped by weekday for the next rolling week.
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -58,6 +59,7 @@ serve(async (req) => {
     const token = await gymLogin(userRow.username, password);
 
     const timeZone = Deno.env.get('APP_TIMEZONE') || 'Europe/Rome';
+    // Start from tomorrow so users don't see already-started classes.
     const nowInTz = new Date(new Date().toLocaleString('en-US', { timeZone }));
     const tomorrow = new Date(nowInTz);
     tomorrow.setDate(tomorrow.getDate() + 1);
@@ -90,6 +92,7 @@ serve(async (req) => {
 
       const normalized = serviceDesc.toLowerCase();
       byDay[dayName] = byDay[dayName] || [];
+      // Deduplicate course names per day for UI selection lists.
       if (!byDay[dayName].includes(normalized)) {
         byDay[dayName].push(normalized);
       }
