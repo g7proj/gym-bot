@@ -17,7 +17,6 @@ export default function CalendarView({
 }) {
   const hasDays = Array.isArray(days) && days.length > 0;
   const [calendarFilter, setCalendarFilter] = useState('all');
-  const showWaitlistPosition = calendarFilter === 'mine';
 
   const groupedDays = useMemo(() => (Array.isArray(days) ? days : []), [days]);
 
@@ -34,7 +33,12 @@ export default function CalendarView({
     groupedDays.forEach((day) => {
       map[day.date] = (day.items || []).map((item) => {
         const match = myBookingsByKey.get(bookingKey(item));
-        if (!match) return item;
+        if (!match) {
+          return {
+            ...item,
+            waitingListPosition: 0,
+          };
+        }
         return {
           ...item,
           bookingId: match.bookingId,
@@ -42,7 +46,7 @@ export default function CalendarView({
           type: match.type ?? item.type,
           idDurata: match.idDurata ?? item.idDurata,
           isUserPresent: match.isUserPresent,
-          waitingListPosition: match.waitingListPosition ?? item.waitingListPosition,
+          waitingListPosition: Number(match.waitingListPosition ?? 0),
         };
       });
     });
@@ -208,9 +212,7 @@ export default function CalendarView({
                               {booked && <span className="text-emerald-200">Booked</span>}
                               {hasWaitingList ? (
                                 <span className="text-amber-200">
-                                  {showWaitlistPosition && waitingListItem
-                                    ? `WL #${waitingListItem.waitingListPosition}`
-                                    : 'WL'}
+                                  {waitingListItem ? `WL #${waitingListItem.waitingListPosition}` : 'WL'}
                                 </span>
                               ) : null}
                             </div>
@@ -252,7 +254,7 @@ export default function CalendarView({
                   ) : null}
                   {item.waitingListPosition > 0 ? (
                     <span className="rounded-full bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-700">
-                      {showWaitlistPosition ? `WL #${item.waitingListPosition}` : 'WL'}
+                      {`WL #${item.waitingListPosition}`}
                     </span>
                   ) : null}
                   {item.bookingId ? (

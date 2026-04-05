@@ -1,13 +1,15 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import CalendarView from './components/CalendarView';
 import Dashboard from './components/Dashboard';
 import Header from './components/Header';
 import LoadingOverlay from './components/LoadingOverlay';
 import LoginForm from './components/LoginForm';
 import NoticeToast from './components/NoticeToast';
+import Sidebar from './components/Sidebar';
 import { supabase } from './services/supabaseClient';
 import { fetchCalendar, fetchCourses, fetchMyBookings, bookLesson, cancelLesson } from './services/gymFunctions';
 import { getSession, signInOrSignUp } from './services/auth';
+import { getTodayIsoLocal } from './utils/date';
 
 function App() {
   const [sessionUserId, setSessionUserId] = useState(null);
@@ -18,10 +20,12 @@ function App() {
   const [coursesByDay, setCoursesByDay] = useState({});
   const [calendarDays, setCalendarDays] = useState([]);
   const [calendarMeta, setCalendarMeta] = useState({ startDate: null, endDate: null });
-  const [selectedDate, setSelectedDate] = useState(null);
+  const [selectedDate, setSelectedDate] = useState(getTodayIsoLocal());
   const [myBookings, setMyBookings] = useState([]);
   const [notice, setNotice] = useState(null);
   const [activeTab, setActiveTab] = useState('calendar');
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const selectedByUserRef = useRef(false);
 
   const isBusy = pendingCount > 0;
 
@@ -102,6 +106,9 @@ function App() {
         const currentUserId = data?.user_id || session.user.id;
         await loadUser(currentUserId);
         await loadCourses();
+        selectedByUserRef.current = false;
+        setSelectedDate(getTodayIsoLocal());
+        setActiveTab('calendar');
       });
     } catch (err) {
       setError(err?.message || 'Login failed');
@@ -119,7 +126,22 @@ function App() {
         const startDate = data?.start_date || null;
         const endDate = data?.end_date || null;
         setCalendarMeta({ startDate, endDate });
-        if (startDate && (!selectedDate || selectedDate < startDate || selectedDate > endDate)) {
+
+        const today = getTodayIsoLocal();
+        const isSelectedValid = selectedDate && startDate && endDate
+          ? selectedDate >= startDate && selectedDate <= endDate
+          : Boolean(selectedDate);
+
+        if (!selectedByUserRef.current) {
+          if (today && startDate && endDate && today >= startDate && today <= endDate) {
+            setSelectedDate(today);
+          } else if (startDate) {
+            setSelectedDate(startDate);
+          }
+          return;
+        }
+
+        if (!isSelectedValid && startDate) {
           setSelectedDate(startDate);
         }
       } catch (_err) {
@@ -224,6 +246,13 @@ function App() {
     setCalendarDays([]);
     setCalendarMeta({ startDate: null, endDate: null });
     setMyBookings([]);
+    selectedByUserRef.current = false;
+    setSelectedDate(getTodayIsoLocal());
+  };
+
+  const handleSelectDate = (date) => {
+    selectedByUserRef.current = true;
+    setSelectedDate(date);
   };
 
   useEffect(() => {
@@ -235,6 +264,9 @@ function App() {
       setSessionUserId(userId);
       if (userId) {
         loadUser(userId).catch(() => {});
+      } else {
+        selectedByUserRef.current = false;
+        setSelectedDate(getTodayIsoLocal());
       }
     };
     initSession().catch(() => {
@@ -253,6 +285,8 @@ function App() {
           setCoursesByDay({});
           setCalendarDays([]);
           setCalendarMeta({ startDate: null, endDate: null });
+          selectedByUserRef.current = false;
+          setSelectedDate(getTodayIsoLocal());
         }
       }
     });
@@ -281,42 +315,52 @@ function App() {
     <div className="min-h-screen bg-gradient-to-b from-slate-50 via-white to-slate-100 text-slate-900">
       {isBusy && <LoadingOverlay />}
       <NoticeToast notice={notice} />
-      <div className="mx-auto max-w-5xl px-4 py-6 md:py-10">
-        <Header
-          user={user}
-          activeTab={activeTab}
-          onTabChange={setActiveTab}
-          onRefreshCourses={loadCourses}
-          onLogout={handleLogout}
-        />
-
-        {error && (
-          <div className="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-            {error}
-          </div>
-        )}
-
-        {!user ? (
-          <LoginForm onLogin={handleLogin} loading={loading} />
-        ) : activeTab === 'preferences' ? (
-          <Dashboard
+      <div className="flex">
+        {user && (
+          <Sidebar
             user={user}
-            coursesByDay={coursesByDay}
-            onUpdatePreferences={updatePreferences}
-            loading={loading}
-          />
-        ) : (
-          <CalendarView
-            days={calendarDays}
-            meta={calendarMeta}
-            myBookings={myBookings}
-            selectedDate={selectedDate}
-            onSelectDate={setSelectedDate}
-            onRefresh={refreshCalendar}
-            onBook={handleBooking}
-            onCancel={handleCancel}
+            activeTab={activeTab}
+            onTabChange={setActiveTab}
+            isOpen={isMenuOpen}
+            onClose={() => setIsMenuOpen(false)}
           />
         )}
+        <div className="flex-1 px-4 py-6 md:px-8">
+          <Header
+            user={user}
+            onToggleMenu={() => setIsMenuOpen((open) => !open)}
+            onRefreshCourses={loadCourses}
+            onLogout={handleLogout}
+          />
+
+          {error && (
+            <div className="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+              {error}
+            </div>
+          )}
+
+          {!user ? (
+            <LoginForm onLogin={handleLogin} loading={loading} />
+          ) : activeTab === 'preferences' ? (
+            <Dashboard
+              user={user}
+              coursesByDay={coursesByDay}
+              onUpdatePreferences={updatePreferences}
+              loading={loading}
+            />
+          ) : (
+            <CalendarView
+              days={calendarDays}
+              meta={calendarMeta}
+              myBookings={myBookings}
+              selectedDate={selectedDate}
+              onSelectDate={handleSelectDate}
+              onRefresh={refreshCalendar}
+              onBook={handleBooking}
+              onCancel={handleCancel}
+            />
+          )}
+        </div>
       </div>
     </div>
   );

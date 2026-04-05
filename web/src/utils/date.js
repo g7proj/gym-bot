@@ -44,3 +44,8 @@ export function weekdayLabel(dateStr) {
   const mondayIndex = (jsDay + 6) % 7;
   return WEEKDAY_LABELS[mondayIndex] || '';
 }
+
+// Local YYYY-MM-DD string for selecting the current day.
+export function getTodayIsoLocal() {
+  return new Date().toLocaleDateString('en-CA');
+}
