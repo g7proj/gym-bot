@@ -2,8 +2,9 @@ name: Daily Gym Booking
 
 on:
   schedule:
-    - cron: '5 6 * * *'  # 07:05 Europe/Rome during CET (UTC+1)
-    - cron: '5 5 * * *'  # 07:05 Europe/Rome during CEST (UTC+2)
+    # Every 30 minutes during the morning window (UTC).
+    # 05:00-07:30 UTC = 07:00-09:30 CEST / 06:00-08:30 CET.
+    - cron: '0,30 5-7 * * *'
   workflow_dispatch:  # Allows manual triggering for testing
 
 jobs:

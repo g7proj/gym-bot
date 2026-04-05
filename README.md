@@ -197,6 +197,18 @@ Required secrets:
 
 The workflow runs `scripts/book_all_users.py`.
 
+## Reliable Booking Automation (Edge Functions)
+
+To improve reliability, run the booking edge function every 30 minutes during a
+morning window (ex: 07:00-09:30 Europe/Rome). Each run checks:
+
+- It is after 07:00 local time
+- The user has not already booked today
+- A distributed lock can be acquired in Supabase
+
+Use a single-row-per-user-per-day lock so the booking job is idempotent and safe
+to re-run if the cron triggers multiple times or the provider is unreliable.
+
 ## Project Structure
 
 - `src/gym_bot/client.py`: HTTP calls (login, lessons, booking)

@@ -16,16 +16,25 @@ from gym_bot.config import Credentials
 from gym_bot import schedule
 
 
+TIMEZONE = "Europe/Rome"
+LOCK_TTL_MINUTES = 20
+LOCK_RETRY_MINUTES = 5
+
+
 def should_run_now() -> bool:
-    """Ensure the job runs at 07:XX Europe/Rome, even with UTC cron."""
-    now = datetime.now(ZoneInfo("Europe/Rome"))
-    return now.hour == 7
+    """Ensure the job runs after 07:00 Europe/Rome, even with UTC cron."""
+    now = datetime.now(ZoneInfo(TIMEZONE))
+    return now.hour >= 7
+
+
+def run_date_today() -> datetime.date:
+    return datetime.now(ZoneInfo(TIMEZONE)).date()
 
 
 def main() -> None:
-    # if not should_run_now():
-    #     print("Skipping run: not 07:XX Europe/Rome.")
-    #     return
+    if not should_run_now():
+        print("Skipping run: not after 07:00 Europe/Rome.")
+        return
 
     storage = UserStorage()
     users = storage.list_users()
@@ -34,8 +43,21 @@ def main() -> None:
         return
 
     crypto = CryptoUtils()
+    run_date = run_date_today()
+
     for user in users:
         print(f"Processing user {user.id}")
+
+        acquired, run_id, status = storage.acquire_booking_lock(
+            user_id=user.id,
+            run_date=run_date,
+            ttl_minutes=LOCK_TTL_MINUTES,
+        )
+
+        if not acquired:
+            print(f"Skipping user {user.id}: lock not acquired (status={status})")
+            continue
+
         try:
             print(f"Decrypting credentials for user {user.id}")
             print(f"User {user.id} has username: {user.credentials.username}")
@@ -94,6 +116,7 @@ def main() -> None:
 
             if not available:
                 print(f"No available lessons for user {user.id} on {twentieth_day}")
+                storage.mark_booking_completed(user.id, run_date, run_id)
                 continue
 
             # Book all available lessons for the 20th day
@@ -109,7 +132,10 @@ def main() -> None:
                 start_datetime = schedule.datetime.combine(lesson_date, start_time_obj)
                 end_datetime = schedule.datetime.combine(lesson_date, end_time_obj)
 
-                print(f"Attempting to book lesson {lesson.get('IDLesson')} for user {user.id} on {start_datetime}")
+                print(
+                    f"Attempting to book lesson {lesson.get('IDLesson')} for user {user.id} "
+                    f"on {start_datetime}"
+                )
                 book_response = client.book(
                     booking_id=lesson["IDServizio"],
                     start_time=start_datetime.isoformat(timespec="seconds"),
@@ -118,12 +144,25 @@ def main() -> None:
                 )
 
                 if book_response.get("Successful"):
-                    print(f"Booking successful for user {user.id} lesson {lesson.get('IDLesson')}")
+                    print(
+                        f"Booking successful for user {user.id} lesson {lesson.get('IDLesson')}"
+                    )
                 else:
-                    print(f"Booking failed for user {user.id} lesson {lesson.get('IDLesson')}")
+                    print(
+                        f"Booking failed for user {user.id} lesson {lesson.get('IDLesson')}"
+                    )
+
+            storage.mark_booking_completed(user.id, run_date, run_id)
 
         except Exception as exc:
             print(f"Error processing user {user.id}: {exc}")
+            storage.mark_booking_failed(
+                user_id=user.id,
+                run_date=run_date,
+                run_id=run_id,
+                error=str(exc),
+                retry_minutes=LOCK_RETRY_MINUTES,
+            )
 
 
 if __name__ == "__main__":

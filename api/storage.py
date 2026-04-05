@@ -2,6 +2,7 @@
 Postgres-backed storage for users and preferences.
 """
 import os
+from datetime import date, datetime, timedelta
 from typing import Dict, List, Optional, Tuple
 
 import psycopg
@@ -128,3 +129,75 @@ class UserStorage:
                 users.append(self._row_to_user(row, by_day))
 
             return users
+
+    def acquire_booking_lock(
+        self,
+        user_id: str,
+        run_date: date,
+        ttl_minutes: int = 20,
+    ) -> Tuple[bool, Optional[str], Optional[str]]:
+        with self._connect() as conn:
+            row = conn.execute(
+                "select * from acquire_booking_lock(%s, %s, %s)",
+                (user_id, run_date, f"{ttl_minutes} minutes"),
+            ).fetchone()
+            if not row:
+                return False, None, None
+            return bool(row["acquired"]), row.get("run_id"), row.get("status")
+
+    def complete_booking_lock(
+        self,
+        user_id: str,
+        run_date: date,
+        run_id: str,
+        status: str,
+        error: Optional[str] = None,
+        lock_until: Optional[datetime] = None,
+    ) -> None:
+        with self._connect() as conn:
+            conn.execute(
+                """
+                update booking_daily_lock
+                   set status = %s,
+                       error = %s,
+                       locked_until = %s
+                 where user_id = %s
+                   and run_date = %s
+                   and run_id = %s
+                """,
+                (
+                    status,
+                    error,
+                    lock_until,
+                    user_id,
+                    run_date,
+                    run_id,
+                ),
+            )
+            conn.commit()
+
+    def mark_booking_completed(self, user_id: str, run_date: date, run_id: str) -> None:
+        self.complete_booking_lock(
+            user_id=user_id,
+            run_date=run_date,
+            run_id=run_id,
+            status="completed",
+            lock_until=datetime.utcnow(),
+        )
+
+    def mark_booking_failed(
+        self,
+        user_id: str,
+        run_date: date,
+        run_id: str,
+        error: str,
+        retry_minutes: int = 5,
+    ) -> None:
+        self.complete_booking_lock(
+            user_id=user_id,
+            run_date=run_date,
+            run_id=run_id,
+            status="failed",
+            error=error,
+            lock_until=datetime.utcnow() + timedelta(minutes=retry_minutes),
+        )
