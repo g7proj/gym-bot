@@ -21,7 +21,7 @@ function App() {
   const [selectedDate, setSelectedDate] = useState(null);
   const [myBookings, setMyBookings] = useState([]);
   const [notice, setNotice] = useState(null);
-  const [activeTab, setActiveTab] = useState('preferences');
+  const [activeTab, setActiveTab] = useState('calendar');
 
   const isBusy = pendingCount > 0;
 
