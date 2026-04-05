@@ -36,7 +36,7 @@ export default function Dashboard({ user, coursesByDay, onUpdatePreferences, loa
   const filterValue = courseFilter.trim().toLowerCase();
 
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+    <div className="rounded-md border border-slate-200 bg-white p-5 shadow-sm">
       <div className="mb-5">
         <h2 className="text-lg font-semibold">Course preferences</h2>
         <p className="text-sm text-slate-600">
@@ -51,7 +51,7 @@ export default function Dashboard({ user, coursesByDay, onUpdatePreferences, loa
         <input
           id="courseFilter"
           type="text"
-          className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-700 shadow-sm focus:border-slate-400 focus:outline-none"
+          className="mt-2 w-full rounded-md border border-slate-300 px-3 py-2 text-slate-700 shadow-sm focus:border-slate-400 focus:outline-none"
           placeholder="Type to filter"
           value={courseFilter}
           onChange={(e) => setCourseFilter(e.target.value)}
@@ -59,7 +59,7 @@ export default function Dashboard({ user, coursesByDay, onUpdatePreferences, loa
       </div>
 
       {!hasCourses && (
-        <div className="mb-4 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+        <div className="mb-4 rounded-md border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
           No courses found for this week. Try refreshing.
         </div>
       )}
@@ -72,7 +72,7 @@ export default function Dashboard({ user, coursesByDay, onUpdatePreferences, loa
           });
 
           return (
-            <div key={day} className="rounded-xl border border-slate-200 bg-slate-50/60 p-4">
+            <div key={day} className="rounded-md border border-slate-200 bg-slate-50/60 p-4">
               <div className="mb-3 text-sm font-semibold text-slate-700">
                 {day.charAt(0).toUpperCase() + day.slice(1)}
               </div>
@@ -82,9 +82,9 @@ export default function Dashboard({ user, coursesByDay, onUpdatePreferences, loa
                   return (
                     <label
                       key={`${day}-${course}`}
-                      className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-sm transition ${
+                      className={`inline-flex items-center gap-2 rounded-md border px-3 py-1 text-sm transition ${
                         checked
-                          ? 'border-slate-900 bg-slate-900 text-white'
+                          ? 'border-brand bg-brand text-white'
                           : 'border-slate-300 bg-white text-slate-700 hover:border-slate-400'
                       }`}
                     >
@@ -109,7 +109,7 @@ export default function Dashboard({ user, coursesByDay, onUpdatePreferences, loa
 
       <div className="mt-6 flex justify-end">
         <button
-          className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-slate-800 disabled:opacity-60"
+          className="rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-dark disabled:opacity-60"
           type="submit"
           disabled={loading}
           onClick={handleSubmit}

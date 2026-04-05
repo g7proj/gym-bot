@@ -24,7 +24,7 @@ function App() {
   const [myBookings, setMyBookings] = useState([]);
   const [notice, setNotice] = useState(null);
   const [activeTab, setActiveTab] = useState('calendar');
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isMenuOpen, setIsMenuOpen] = useState(() => window.innerWidth >= 768);
   const selectedByUserRef = useRef(false);
 
   const isBusy = pendingCount > 0;
@@ -312,7 +312,7 @@ function App() {
   }, [activeTab, user?.id, loadCalendar, loadMyBookings]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-50 via-white to-slate-100 text-slate-900">
+    <div className="min-h-screen bg-gradient-to-br from-opal-mist via-opal-pearl to-opal-sky text-slate-900">
       {isBusy && <LoadingOverlay />}
       <NoticeToast notice={notice} />
       <div className="flex">
@@ -334,7 +334,7 @@ function App() {
           />
 
           {error && (
-            <div className="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+            <div className="mb-4 rounded-md border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
               {error}
             </div>
           )}

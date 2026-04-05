@@ -11,7 +11,7 @@ export default function LoginForm({ onLogin, loading }) {
   };
 
   return (
-    <div className="mx-auto w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+    <div className="mx-auto w-full max-w-md rounded-md border border-slate-200 bg-white p-6 shadow-sm">
       <h2 className="mb-2 text-lg font-semibold">Sign in</h2>
       <p className="mb-4 text-sm text-slate-600">Use your gym portal credentials.</p>
       <form onSubmit={handleSubmit}>
@@ -20,7 +20,7 @@ export default function LoginForm({ onLogin, loading }) {
             Username
           </label>
           <input
-            className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-700 shadow-sm focus:border-slate-400 focus:outline-none"
+            className="mt-2 w-full rounded-md border border-slate-300 px-3 py-2 text-slate-700 shadow-sm focus:border-slate-400 focus:outline-none"
             id="username"
             type="text"
             value={username}
@@ -33,7 +33,7 @@ export default function LoginForm({ onLogin, loading }) {
             Password
           </label>
           <input
-            className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-700 shadow-sm focus:border-slate-400 focus:outline-none"
+            className="mt-2 w-full rounded-md border border-slate-300 px-3 py-2 text-slate-700 shadow-sm focus:border-slate-400 focus:outline-none"
             id="password"
             type="password"
             value={password}
@@ -42,7 +42,7 @@ export default function LoginForm({ onLogin, loading }) {
           />
         </div>
         <button
-          className="w-full rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-slate-800 disabled:opacity-60"
+          className="w-full rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-dark disabled:opacity-60"
           type="submit"
           disabled={loading}
         >
