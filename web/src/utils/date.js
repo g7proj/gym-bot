@@ -1,5 +1,19 @@
 import { MONTH_LABELS, WEEKDAY_LABELS } from '../constants/calendar';
 
+// Convert a YYYY-MM-DD string into a Date object, treating it as local time.
+export function parseLocalDate(iso) {
+  const [year, month, day] = iso.split('-').map(Number);
+  return new Date(year, month - 1, day);
+};
+
+// Format a Date object into a YYYY-MM-DD string, treating it as local time.
+export function formatLocalDate(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+};
+
 // Format YYYY-MM-DD into a compact DD/MM/YY string for the UI.
 export function formatShortDate(dateStr) {
   const [year, month, day] = dateStr.split('-');

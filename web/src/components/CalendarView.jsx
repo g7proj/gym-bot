@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { WEEKDAY_LABELS } from '../constants/calendar';
 import { bookingKey } from '../utils/booking';
 import { formatDay, formatShortDate, monthLabel, weekdayLabel } from '../utils/date';
+import { formatLocalDate, parseLocalDate } from '../utils/date.js';
 
 // Calendar view that merges availability with the user's bookings.
 export default function CalendarView({
@@ -61,18 +62,23 @@ export default function CalendarView({
 
   const dateList = useMemo(() => {
     if (!meta?.startDate || !meta?.endDate) return [];
-    const start = new Date(`${meta.startDate}T00:00:00`);
-    const end = new Date(`${meta.endDate}T00:00:00`);
-    // Expand the view to the full end-month for a stable grid.
+
+    const start = parseLocalDate(meta.startDate);
+    const end = parseLocalDate(meta.endDate);
+
     end.setMonth(end.getMonth() + 1);
     end.setDate(0);
+
     if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return [];
+
     const list = [];
     const current = new Date(start);
+
     while (current <= end) {
-      list.push(current.toISOString().slice(0, 10));
+      list.push(formatLocalDate(current));
       current.setDate(current.getDate() + 1);
     }
+
     return list;
   }, [meta]);
 
