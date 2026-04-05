@@ -23,9 +23,9 @@ def should_run_now() -> bool:
 
 
 def main() -> None:
-    if not should_run_now():
-        print("Skipping run: not 07:XX Europe/Rome.")
-        return
+    # if not should_run_now():
+    #     print("Skipping run: not 07:XX Europe/Rome.")
+    #     return
 
     storage = UserStorage()
     users = storage.list_users()
