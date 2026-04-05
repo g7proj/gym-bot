@@ -8,4 +8,5 @@ if (!supabaseUrl || !supabaseAnonKey) {
   console.warn('Missing Supabase env vars. Set REACT_APP_SUPABASE_URL and REACT_APP_SUPABASE_ANON_KEY.');
 }
 
+// Shared client used by auth and edge-function calls.
 export const supabase = createClient(supabaseUrl || '', supabaseAnonKey || '');
