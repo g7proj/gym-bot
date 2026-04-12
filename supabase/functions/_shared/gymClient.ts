@@ -1,4 +1,3 @@
-// API client for the external gym booking system.
 const BASE_URL = 'https://inforyou.teamsystem.com/dream/api/v1';
 const COMPANY_ID = 2;
 const DEFAULT_APP_TOKEN = (
@@ -180,4 +179,38 @@ export async function cancelBooking(token: string, payload: Record<string, unkno
 // Remove the user from the waitlist.
 export async function removeWait(token: string, payload: Record<string, unknown>): Promise<any> {
   return postBooking(token, 'RemoveWait', payload);
+}
+
+// Change the user's gym password.
+export async function changePassword(
+  token: string,
+  oldPassword: string,
+  newPassword: string,
+): Promise<any> {
+  const appToken = getAppToken();
+  const url = new URL(`${BASE_URL}/security/changepassword`);
+  url.searchParams.set('oldpwd', oldPassword);
+  url.searchParams.set('newpwd', newPassword);
+
+  const response = await fetch(url.toString(), {
+    method: 'GET',
+    headers: {
+      AppToken: appToken,
+      IYESUrl: IYES_URL,
+      AuthToken: token,
+      Cookie: buildCookie(appToken, token),
+    },
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`changepassword failed with HTTP ${response.status}: ${text}`);
+  }
+
+  const data = await response.json();
+  if (!data?.Successful) {
+    const message = data?.ErrorMessage || data?.Comment || 'Unknown error';
+    throw new Error(`changepassword not successful: ${message}`);
+  }
+  return data;
 }

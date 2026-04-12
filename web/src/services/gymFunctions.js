@@ -61,3 +61,11 @@ export async function cancelLesson(item) {
     isUserPresent: item.isUserPresent,
   });
 }
+
+// Change the gym password and sync Supabase credentials.
+export async function changeGymPassword(oldPassword, newPassword) {
+  await invokeWithSession('gym-change-password', {
+    oldPassword,
+    newPassword,
+  });
+}

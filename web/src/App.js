@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import CalendarView from './components/CalendarView';
+import ChangePasswordModal from './components/ChangePasswordModal';
 import Dashboard from './components/Dashboard';
 import Header from './components/Header';
 import LoadingOverlay from './components/LoadingOverlay';
@@ -7,7 +8,14 @@ import LoginForm from './components/LoginForm';
 import NoticeToast from './components/NoticeToast';
 import Sidebar from './components/Sidebar';
 import { supabase } from './services/supabaseClient';
-import { fetchCalendar, fetchCourses, fetchMyBookings, bookLesson, cancelLesson } from './services/gymFunctions';
+import {
+  bookLesson,
+  cancelLesson,
+  changeGymPassword,
+  fetchCalendar,
+  fetchCourses,
+  fetchMyBookings,
+} from './services/gymFunctions';
 import { getSession, signInOrSignUp } from './services/auth';
 import { getTodayIsoLocal } from './utils/date';
 
@@ -24,7 +32,9 @@ function App() {
   const [myBookings, setMyBookings] = useState([]);
   const [notice, setNotice] = useState(null);
   const [activeTab, setActiveTab] = useState('calendar');
-  const [isMenuOpen, setIsMenuOpen] = useState(() => window.innerWidth >= 768);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
+  const [passwordSuccess, setPasswordSuccess] = useState('');
   const selectedByUserRef = useRef(false);
 
   const isBusy = pendingCount > 0;
@@ -111,7 +121,38 @@ function App() {
         setActiveTab('calendar');
       });
     } catch (err) {
-      setError(err?.message || 'Login failed');
+      const message = String(err?.message || '');
+      if (message.includes('Login not successful') || message.toLowerCase().includes('bad login')) {
+        setError('Wrong credentials');
+      } else {
+        setError(err?.message || 'Login failed');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleChangePassword = async ({ oldPassword, newPassword, confirmPassword }) => {
+    if (newPassword !== confirmPassword) {
+      setNotice({ type: 'error', message: 'New passwords do not match.' });
+      return;
+    }
+
+    setLoading(true);
+    setPasswordSuccess('');
+    try {
+      await runWithPending(async () => {
+        await changeGymPassword(oldPassword, newPassword);
+        setPasswordSuccess('Password updated successfully.');
+        setNotice({ type: 'success', message: 'Password updated.' });
+      });
+    } catch (err) {
+      const message = String(err?.message || '');
+      if (message.toLowerCase().includes('password') || message.toLowerCase().includes('login')) {
+        setNotice({ type: 'error', message: 'Wrong credentials' });
+      } else {
+        setNotice({ type: 'error', message: err?.message || 'Unable to change password.' });
+      }
     } finally {
       setLoading(false);
     }
@@ -340,7 +381,14 @@ function App() {
           )}
 
           {!user ? (
-            <LoginForm onLogin={handleLogin} loading={loading} />
+            <LoginForm
+              onLogin={handleLogin}
+              onChangePassword={() => {
+                setPasswordSuccess('');
+                setIsChangePasswordOpen(true);
+              }}
+              loading={loading}
+            />
           ) : activeTab === 'preferences' ? (
             <Dashboard
               user={user}
@@ -362,6 +410,14 @@ function App() {
           )}
         </div>
       </div>
+
+      <ChangePasswordModal
+        open={isChangePasswordOpen}
+        onClose={() => setIsChangePasswordOpen(false)}
+        onSubmit={handleChangePassword}
+        loading={loading}
+        successMessage={passwordSuccess}
+      />
     </div>
   );
 }
