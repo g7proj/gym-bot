@@ -1,6 +1,7 @@
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { decryptString } from '../_shared/crypto.ts';
+import { requireAuth } from '../_shared/auth.ts';
 import { addWait, bookLesson, gymLogin } from '../_shared/gymClient.ts';
 
 const corsHeaders = {
@@ -17,24 +18,18 @@ serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
     const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY') || '';
+    const supabaseServiceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
     const authHeader = req.headers.get('authorization') || '';
 
     const supabase = createClient(supabaseUrl, supabaseAnonKey, {
       global: { headers: { Authorization: authHeader } },
     });
 
-    // The request must be authenticated with Supabase auth.
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser();
-
-    if (userError || !user) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-        status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+    const authResult = await requireAuth(req, supabaseUrl, supabaseServiceRoleKey, corsHeaders);
+    if (authResult.errorResponse) {
+      return authResult.errorResponse;
     }
+    const user = authResult.user;
 
     // Load encrypted gym credentials from the users table.
     const { data: userRow, error: userRowError } = await supabase
@@ -89,7 +84,7 @@ serve(async (req) => {
     }
 
     const password = await decryptString(userRow.password_encrypted);
-    const token = await gymLogin(userRow.username, password);
+    const gymToken = await gymLogin(userRow.username, password);
 
     const payload = {
       Note: '',
@@ -104,8 +99,8 @@ serve(async (req) => {
 
     // If no slots are available, fall back to waitlist.
     const response = availablePlaces > 0
-      ? await bookLesson(token, payload)
-      : await addWait(token, payload);
+      ? await bookLesson(gymToken, payload)
+      : await addWait(gymToken, payload);
 
     return new Response(JSON.stringify({ success: true, response }), {
       status: 200,

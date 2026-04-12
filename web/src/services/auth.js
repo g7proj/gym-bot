@@ -11,6 +11,26 @@ function usernameToEmail(username) {
   return `${cleaned}@gymbot.example`;
 }
 
+function isInvalidCredentials(error) {
+  const message = String(error?.message || '').toLowerCase();
+  return error?.code === 'invalid_credentials' || message.includes('invalid login credentials');
+}
+
+function isUserAlreadyExists(error) {
+  const message = String(error?.message || '').toLowerCase();
+  return error?.code === 'user_already_exists' || message.includes('already registered');
+}
+
+// Attempt to recover an existing Supabase Auth user using gym credentials.
+async function recoverAuthPassword(username, password) {
+  const { error } = await supabase.functions.invoke('gym-recover', {
+    body: { username, password },
+  });
+  if (error) {
+    throw error;
+  }
+}
+
 // Sign in the user or create the account if it does not exist.
 export async function signInOrSignUp(username, password) {
   const email = usernameToEmail(username);
@@ -26,11 +46,15 @@ export async function signInOrSignUp(username, password) {
     email,
     password,
   });
-  if (signUpError && signUpError.message !== 'User already registered') {
+  if (signUpError && !isUserAlreadyExists(signUpError)) {
     throw signUpError;
   }
   if (signUpData?.session) {
     return signUpData.session;
+  }
+
+  if (isInvalidCredentials(signInError) || isUserAlreadyExists(signUpError)) {
+    await recoverAuthPassword(username, password);
   }
 
   const { data: retryData, error: retryError } = await supabase.auth.signInWithPassword({
