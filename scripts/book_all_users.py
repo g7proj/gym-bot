@@ -46,7 +46,7 @@ def main() -> None:
     run_date = run_date_today()
 
     for user in users:
-        print(f"Processing user {user.id}")
+        print(f"Processing user {user}")
 
         acquired, run_id, status = storage.acquire_booking_lock(
             user_id=user.id,

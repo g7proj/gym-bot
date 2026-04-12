@@ -32,3 +32,7 @@ class User(BaseModel):
     id: str = Field(..., description="Unique user identifier")
     credentials: UserCredentials
     preferences: UserPreferences = Field(default_factory=UserPreferences, description="Course preferences")
+
+    """String representation for debugging purposes. Prints the user ID and username, and preferences but not the password."""
+    def __str__(self):
+        return f"User(id={self.id}, username={self.credentials.username}) Preferences: {self.preferences.by_day}"

@@ -54,6 +54,19 @@ serve(async (req) => {
     await gymLogin(username, password);
     const encrypted = await encryptString(password);
 
+    // Keep Supabase Auth password in sync with the gym password.
+    const { error: authUpdateError } = await supabaseAdmin.auth.admin.updateUserById(
+      user.id,
+      { password },
+    );
+
+    if (authUpdateError) {
+      return new Response(JSON.stringify({ error: authUpdateError.message }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     // Enforce unique username by removing any older account record.
     const { data: existingUser } = await supabaseAdmin
       .from('users')
