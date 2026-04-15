@@ -1,14 +1,14 @@
-"""
+﻿"""
 Postgres-backed storage for users and preferences.
 """
 import os
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time as time_cls, timedelta
 from typing import Dict, List, Optional, Tuple
 
 import psycopg
 from psycopg.rows import dict_row
 
-from .models import User, UserCredentials, UserPreferences
+from .models import PreferenceSlot, User, UserCredentials, UserPreferences
 
 
 class UserStorage:
@@ -24,15 +24,57 @@ class UserStorage:
     def _connect(self):
         return psycopg.connect(self.dsn, row_factory=dict_row)
 
-    def _build_by_day(self, rows: List[Dict]) -> Dict[str, List[str]]:
-        by_day: Dict[str, List[str]] = {}
+    def _normalize_time(self, value) -> Optional[str]:
+        if value is None:
+            return None
+        if isinstance(value, time_cls):
+            return value.isoformat(timespec="seconds")
+
+        text = str(value).strip()
+        if not text:
+            return None
+
+        try:
+            if "T" in text:
+                return datetime.fromisoformat(text).time().isoformat(timespec="seconds")
+            return time_cls.fromisoformat(text).isoformat(timespec="seconds")
+        except ValueError:
+            return None
+
+    def _normalize_slot(self, slot) -> Optional[Tuple[str, str]]:
+        if slot is None:
+            return None
+
+        if isinstance(slot, dict):
+            course_value = slot.get("course")
+            time_value = slot.get("lesson_start_time")
+        else:
+            course_value = getattr(slot, "course", None)
+            time_value = getattr(slot, "lesson_start_time", None)
+
+        course = str(course_value or "").strip().lower()
+        lesson_start_time = self._normalize_time(time_value)
+        if not course or not lesson_start_time:
+            return None
+        return course, lesson_start_time
+
+    def _build_by_day(self, rows: List[Dict]) -> Dict[str, List[PreferenceSlot]]:
+        by_day: Dict[str, List[PreferenceSlot]] = {}
         for row in rows:
-            weekday = row["weekday"]
-            course = row["course"]
-            by_day.setdefault(weekday, []).append(course)
+            weekday = str(row.get("weekday") or "").strip().lower()
+            course = str(row.get("course") or "").strip().lower()
+            lesson_start_time = self._normalize_time(row.get("lesson_start_time"))
+            if not weekday or not course or not lesson_start_time:
+                continue
+            by_day.setdefault(weekday, []).append(
+                PreferenceSlot(course=course, lesson_start_time=lesson_start_time)
+            )
+
+        for slots in by_day.values():
+            slots.sort(key=lambda slot: (slot.lesson_start_time, slot.course))
         return by_day
 
-    def _row_to_user(self, row: Dict, by_day: Dict[str, List[str]]) -> User:
+    def _row_to_user(self, row: Dict, by_day: Dict[str, List[PreferenceSlot]]) -> User:
         return User(
             id=str(row["id"]),
             credentials=UserCredentials(
@@ -42,9 +84,14 @@ class UserStorage:
             preferences=UserPreferences(by_day=by_day),
         )
 
-    def _fetch_preferences(self, conn, user_id: str) -> Dict[str, List[str]]:
+    def _fetch_preferences(self, conn, user_id: str) -> Dict[str, List[PreferenceSlot]]:
         rows = conn.execute(
-            "select weekday, course from preferences where user_id = %s",
+            """
+            select weekday, course, lesson_start_time
+            from preferences
+            where user_id = %s
+            order by weekday, lesson_start_time, course
+            """,
             (user_id,),
         ).fetchall()
         return self._build_by_day(rows)
@@ -82,23 +129,30 @@ class UserStorage:
             by_day = self._fetch_preferences(conn, str(row["id"]))
             return self._row_to_user(row, by_day)
 
-    def save_preferences(self, user_id: str, by_day: Dict[str, List[str]]) -> None:
-        normalized: Dict[str, List[str]] = {}
-        for weekday, courses in by_day.items():
-            cleaned = sorted({str(c).strip().lower() for c in courses if str(c).strip()})
+    def save_preferences(self, user_id: str, by_day: Dict[str, List[Dict]]) -> None:
+        normalized: Dict[str, List[Tuple[str, str]]] = {}
+        for weekday, slots in by_day.items():
+            cleaned: List[Tuple[str, str]] = []
+            for slot in slots or []:
+                normalized_slot = self._normalize_slot(slot)
+                if normalized_slot:
+                    cleaned.append(normalized_slot)
             if cleaned:
-                normalized[weekday] = cleaned
+                normalized[str(weekday).strip().lower()] = sorted(set(cleaned))
 
         with self._connect() as conn:
             conn.execute("delete from preferences where user_id = %s", (user_id,))
-            rows: List[Tuple[str, str, str]] = []
+            rows: List[Tuple[str, str, str, str]] = []
             for weekday, courses in normalized.items():
-                for course in courses:
-                    rows.append((user_id, weekday, course))
+                for course, lesson_start_time in courses:
+                    rows.append((user_id, weekday, course, lesson_start_time))
             if rows:
                 with conn.cursor() as cur:
                     cur.executemany(
-                        "insert into preferences (user_id, weekday, course) values (%s, %s, %s)",
+                        """
+                        insert into preferences (user_id, weekday, course, lesson_start_time)
+                        values (%s, %s, %s, %s)
+                        """,
                         rows,
                     )
             conn.commit()
@@ -113,14 +167,31 @@ class UserStorage:
 
             user_ids = [str(row["id"]) for row in user_rows]
             prefs_rows = conn.execute(
-                "select user_id, weekday, course from preferences where user_id = any(%s)",
+                """
+                select user_id, weekday, course, lesson_start_time
+                from preferences
+                where user_id = any(%s)
+                order by user_id, weekday, lesson_start_time, course
+                """,
                 (user_ids,),
             ).fetchall()
 
-            by_user: Dict[str, Dict[str, List[str]]] = {}
+            by_user: Dict[str, Dict[str, List[PreferenceSlot]]] = {}
             for row in prefs_rows:
                 uid = str(row["user_id"])
-                by_user.setdefault(uid, {}).setdefault(row["weekday"], []).append(row["course"])
+                lesson_start_time = self._normalize_time(row.get("lesson_start_time"))
+                if not lesson_start_time:
+                    continue
+                by_user.setdefault(uid, {}).setdefault(str(row["weekday"]), []).append(
+                    PreferenceSlot(
+                        course=str(row["course"]).strip().lower(),
+                        lesson_start_time=lesson_start_time,
+                    )
+                )
+
+            for user_prefs in by_user.values():
+                for slots in user_prefs.values():
+                    slots.sort(key=lambda slot: (slot.lesson_start_time, slot.course))
 
             users: List[User] = []
             for row in user_rows:

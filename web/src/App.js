@@ -66,15 +66,19 @@ function App() {
         }
         const { data: prefRows, error: prefError } = await supabase
           .from('preferences')
-          .select('weekday, course')
+          .select('weekday, course, lesson_start_time')
           .eq('user_id', id);
         if (prefError) {
           throw prefError;
         }
         const byDay = {};
         (prefRows || []).forEach((row) => {
+          if (!row?.lesson_start_time) return;
           byDay[row.weekday] = byDay[row.weekday] || [];
-          byDay[row.weekday].push(row.course);
+          byDay[row.weekday].push({
+            course: row.course,
+            lesson_start_time: row.lesson_start_time,
+          });
         });
         setUser({
           id,
@@ -246,11 +250,17 @@ function App() {
         }
         const cleanedByDay = preferences?.by_day || {};
         const rows = [];
-        Object.entries(cleanedByDay).forEach(([weekday, courses]) => {
-          (courses || []).forEach((course) => {
-            const normalized = String(course || '').trim().toLowerCase();
-            if (normalized) {
-              rows.push({ user_id: sessionUserId, weekday, course: normalized });
+        Object.entries(cleanedByDay).forEach(([weekday, slots]) => {
+          (slots || []).forEach((slot) => {
+            const course = String(slot?.course || '').trim().toLowerCase();
+            const lessonStartTime = String(slot?.lesson_start_time || '').trim();
+            if (course && lessonStartTime) {
+              rows.push({
+                user_id: sessionUserId,
+                weekday,
+                course,
+                lesson_start_time: lessonStartTime,
+              });
             }
           });
         });
@@ -423,3 +433,5 @@ function App() {
 }
 
 export default App;
+
+

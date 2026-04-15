@@ -1,7 +1,27 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { WEEKDAYS } from '../constants/calendar';
+import { formatTimeLabel } from '../utils/date';
 
-// Preferences editor for selecting courses per weekday.
+function normalizeSlot(slot) {
+  if (!slot) return null;
+  const course = String(slot.course || slot.course_label || '').trim().toLowerCase();
+  const lessonStartTime = String(slot.lesson_start_time || '').trim();
+  if (!course || !lessonStartTime) return null;
+  return {
+    course,
+    lesson_start_time: lessonStartTime,
+  };
+}
+
+function slotKey(slot) {
+  return `${slot.course}__${slot.lesson_start_time}`;
+}
+
+function displayCourse(slot) {
+  return slot.course_label || slot.course || '';
+}
+
+// Preferences editor for selecting exact lesson slots per weekday.
 export default function Dashboard({ user, coursesByDay, onUpdatePreferences, loading }) {
   const [byDay, setByDay] = useState({});
   const [courseFilter, setCourseFilter] = useState('');
@@ -10,20 +30,24 @@ export default function Dashboard({ user, coursesByDay, onUpdatePreferences, loa
     const normalized = {};
     WEEKDAYS.forEach((day) => {
       const values = user?.preferences?.by_day?.[day] || [];
-      normalized[day] = Array.isArray(values) ? values : [];
+      normalized[day] = Array.isArray(values)
+        ? values.map(normalizeSlot).filter(Boolean)
+        : [];
     });
     setByDay(normalized);
   }, [user]);
 
-  const toggleCourseForDay = (day, course) => {
+  const toggleSlotForDay = (day, slot) => {
+    const normalizedSlot = normalizeSlot(slot);
+    if (!normalizedSlot) return;
+
     setByDay((prev) => {
-      const current = new Set(prev[day] || []);
-      if (current.has(course)) {
-        current.delete(course);
-      } else {
-        current.add(course);
-      }
-      return { ...prev, [day]: Array.from(current) };
+      const current = prev[day] || [];
+      const key = slotKey(normalizedSlot);
+      const next = current.some((item) => slotKey(item) === key)
+        ? current.filter((item) => slotKey(item) !== key)
+        : [...current, normalizedSlot];
+      return { ...prev, [day]: next };
     });
   };
 
@@ -32,27 +56,37 @@ export default function Dashboard({ user, coursesByDay, onUpdatePreferences, loa
     onUpdatePreferences({ by_day: byDay });
   };
 
-  const hasCourses = Object.keys(coursesByDay || {}).length > 0;
+  const hasCourses = Object.values(coursesByDay || {}).some((items) => (items || []).length > 0);
   const filterValue = courseFilter.trim().toLowerCase();
 
+  const selectedCount = useMemo(
+    () => Object.values(byDay).reduce((total, slots) => total + (slots || []).length, 0),
+    [byDay],
+  );
+
   return (
-    <div className="rounded-md border border-slate-200 bg-white p-5 shadow-sm">
-      <div className="mb-5">
-        <h2 className="text-lg font-semibold">Course preferences</h2>
-        <p className="text-sm text-slate-600">
-          Choose the classes you want for each day. Use search to narrow down the list.
-        </p>
+    <form className="rounded-md border border-slate-200 bg-white p-5 shadow-sm" onSubmit={handleSubmit}>
+      <div className="mb-5 flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+        <div>
+          <h2 className="text-lg font-semibold">Lesson preferences</h2>
+          <p className="text-sm text-slate-600">
+            Pick one or more exact lesson slots for each weekday. The automation will book the matching time.
+          </p>
+        </div>
+        <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+          {selectedCount} slot{selectedCount === 1 ? '' : 's'} selected
+        </div>
       </div>
 
       <div className="mb-5">
         <label className="block text-sm font-medium text-slate-700" htmlFor="courseFilter">
-          Search courses
+          Search lessons
         </label>
         <input
           id="courseFilter"
           type="text"
           className="mt-2 w-full rounded-md border border-slate-300 px-3 py-2 text-slate-700 shadow-sm focus:border-slate-400 focus:outline-none"
-          placeholder="Type to filter"
+          placeholder="Search by course or time"
           value={courseFilter}
           onChange={(e) => setCourseFilter(e.target.value)}
         />
@@ -60,46 +94,69 @@ export default function Dashboard({ user, coursesByDay, onUpdatePreferences, loa
 
       {!hasCourses && (
         <div className="mb-4 rounded-md border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-          No courses found for this week. Try refreshing.
+          No lessons found for this week. Try refreshing.
         </div>
       )}
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         {WEEKDAYS.map((day) => {
-          const dayCourses = (coursesByDay[day] || []).filter((course) => {
+          const daySlots = (coursesByDay[day] || []).filter((slot) => {
             if (!filterValue) return true;
-            return course.includes(filterValue);
+            const haystack = [slot.course_label, slot.course, slot.lesson_start_time, slot.lesson_end_time]
+              .filter(Boolean)
+              .join(' ')
+              .toLowerCase();
+            return haystack.includes(filterValue);
           });
+
+          const selectedSlots = byDay[day] || [];
 
           return (
             <div key={day} className="rounded-md border border-slate-200 bg-slate-50/60 p-4">
-              <div className="mb-3 text-sm font-semibold text-slate-700">
-                {day.charAt(0).toUpperCase() + day.slice(1)}
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <div className="text-sm font-semibold text-slate-700">
+                  {day.charAt(0).toUpperCase() + day.slice(1)}
+                </div>
+                <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                  {selectedSlots.length} selected
+                </div>
               </div>
-              <div className="flex flex-wrap gap-2">
-                {dayCourses.map((course) => {
-                  const checked = (byDay[day] || []).includes(course);
+
+              <div className="space-y-2">
+                {daySlots.map((slot) => {
+                  const normalizedSlot = normalizeSlot(slot);
+                  if (!normalizedSlot) return null;
+                  const checked = selectedSlots.some((item) => slotKey(item) === slotKey(normalizedSlot));
                   return (
-                    <label
-                      key={`${day}-${course}`}
-                      className={`inline-flex items-center gap-2 rounded-md border px-3 py-1 text-sm transition ${
+                    <button
+                      key={`${day}-${slotKey(normalizedSlot)}`}
+                      type="button"
+                      onClick={() => toggleSlotForDay(day, slot)}
+                      className={`flex w-full items-center justify-between rounded-md border px-3 py-2 text-left text-sm transition ${
                         checked
                           ? 'border-brand bg-brand text-white'
                           : 'border-slate-300 bg-white text-slate-700 hover:border-slate-400'
                       }`}
                     >
-                      <input
-                        type="checkbox"
-                        className="sr-only"
-                        checked={checked}
-                        onChange={() => toggleCourseForDay(day, course)}
-                      />
-                      {course.charAt(0).toUpperCase() + course.slice(1)}
-                    </label>
+                      <div className="min-w-0">
+                        <div className="truncate font-semibold">
+                          {displayCourse(slot)}
+                        </div>
+                        <div className={`text-xs ${checked ? 'text-white/80' : 'text-slate-500'}`}>
+                          {formatTimeLabel(slot.lesson_start_time)}
+                          {slot.lesson_end_time ? ` - ${formatTimeLabel(slot.lesson_end_time)}` : ''}
+                        </div>
+                      </div>
+                      <span className={`ml-3 shrink-0 rounded-md px-2 py-1 text-[11px] font-semibold ${
+                        checked ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500'
+                      }`}>
+                        {slot.date || day}
+                      </span>
+                    </button>
                   );
                 })}
-                {dayCourses.length === 0 && (
-                  <span className="text-sm text-slate-500">No courses</span>
+                {daySlots.length === 0 && (
+                  <span className="text-sm text-slate-500">No lessons</span>
                 )}
               </div>
             </div>
@@ -112,11 +169,10 @@ export default function Dashboard({ user, coursesByDay, onUpdatePreferences, loa
           className="rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-dark disabled:opacity-60"
           type="submit"
           disabled={loading}
-          onClick={handleSubmit}
         >
           {loading ? 'Updating...' : 'Update Preferences'}
         </button>
       </div>
-    </div>
+    </form>
   );
 }

@@ -14,7 +14,7 @@ async function invokeWithSession(functionName, body) {
   return data;
 }
 
-// Fetch available courses grouped by weekday.
+// Fetch lesson slots grouped by weekday.
 export async function fetchCourses() {
   const data = await invokeWithSession('gym-courses');
   return data?.by_day || {};
@@ -69,3 +69,4 @@ export async function changeGymPassword(oldPassword, newPassword) {
     newPassword,
   });
 }
+

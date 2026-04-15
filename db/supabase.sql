@@ -1,4 +1,4 @@
--- Supabase schema for gym-bot (Auth + RLS)
+﻿-- Supabase schema for gym-bot (Auth + RLS)
 
 create extension if not exists pgcrypto;
 
@@ -14,9 +14,10 @@ create table if not exists public.preferences (
     user_id uuid not null references public.users(id) on delete cascade,
     weekday text not null,
     course text not null,
+    lesson_start_time time not null,
     created_at timestamptz not null default now(),
     updated_at timestamptz not null default now(),
-    primary key (user_id, weekday, course)
+    primary key (user_id, weekday, course, lesson_start_time)
 );
 
 -- Per-user daily lock to ensure booking runs once per day.
@@ -35,6 +36,7 @@ create table if not exists public.booking_daily_lock (
 create index if not exists idx_users_id on public.users (id);
 create index if not exists idx_preferences_user_id on public.preferences (user_id);
 create index if not exists idx_preferences_weekday on public.preferences (weekday);
+create index if not exists idx_preferences_start_time on public.preferences (lesson_start_time);
 create index if not exists idx_booking_lock_until on public.booking_daily_lock (locked_until);
 
 alter table public.users enable row level security;

@@ -49,3 +49,17 @@ export function weekdayLabel(dateStr) {
 export function getTodayIsoLocal() {
   return new Date().toLocaleDateString('en-CA');
 }
+
+// Format a time string for compact UI display.
+export function formatTimeLabel(timeStr) {
+  if (!timeStr) return '';
+  const text = String(timeStr).trim();
+  if (!text) return '';
+  if (text.includes('T')) {
+    const [, timePart] = text.split('T');
+    return (timePart || text).slice(0, 5);
+  }
+  const parts = text.split(':');
+  if (parts.length < 2) return text;
+  return `${parts[0]}:${parts[1]}`;
+}

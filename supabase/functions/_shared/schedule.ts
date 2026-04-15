@@ -1,4 +1,4 @@
-// Time helpers used by the edge functions to build booking windows.
+﻿// Time helpers used by the edge functions to build booking windows.
 export const WEEKDAY_EN = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
 
 const DEFAULT_TIMEZONE = 'Europe/Rome';
@@ -14,6 +14,24 @@ export function formatLocalIsoSeconds(date: Date): string {
   const pad = (value: number) => String(value).padStart(2, '0');
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
     + `T${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+}
+
+// Normalize an API time string to HH:MM:SS for storage and comparison.
+export function formatApiTime(timeStr: string | null | undefined): string | null {
+  if (!timeStr) return null;
+  const text = String(timeStr).trim();
+  if (!text) return null;
+
+  const isoMatch = text.match(/T(\d{2}:\d{2}:\d{2})/);
+  if (isoMatch) return isoMatch[1];
+
+  const plainMatch = text.match(/^(\d{2}:\d{2}:\d{2})/);
+  if (plainMatch) return plainMatch[1];
+
+  const shortMatch = text.match(/^(\d{2}:\d{2})/);
+  if (shortMatch) return `${shortMatch[1]}:00`;
+
+  return null;
 }
 
 // Build an inclusive window from start day 00:00 to end day 23:59:59.

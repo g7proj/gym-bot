@@ -1,4 +1,4 @@
--- Users
+﻿-- Users
 
 -- Insert or update user (by username)
 -- Returns: id, username, password_encrypted
@@ -27,13 +27,13 @@ where username = $1;
 -- params: $1=user_id
 delete from preferences where user_id = $1;
 
--- Insert preference row
--- params: $1=user_id, $2=weekday, $3=course
-insert into preferences (user_id, weekday, course)
-values ($1, $2, $3);
+-- Insert preference slot
+-- params: $1=user_id, $2=weekday, $3=course, $4=lesson_start_time
+insert into preferences (user_id, weekday, course, lesson_start_time)
+values ($1, $2, $3, $4);
 
 -- Get preferences by user_id
 -- params: $1=user_id
-select user_id, weekday, course
+select user_id, weekday, course, lesson_start_time
 from preferences
 where user_id = $1;
