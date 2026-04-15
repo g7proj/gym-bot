@@ -3,8 +3,8 @@ name: Daily Gym Booking
 on:
   schedule:
     # Every 30 minutes during the morning window (UTC).
-    # 05:00-07:30 UTC = 07:00-09:30 CEST / 06:00-08:30 CET.
-    - cron: '0,30 5-7 * * *'
+    # 04:00-07:30 UTC = 04:00-09:30 CEST / 05:00-08:30 CET. Start early to handle the github cron job time drift and ensure bookings are made as soon as slots open.
+    - cron: '0,30 4-7 * * *'
   workflow_dispatch:  # Allows manual triggering for testing
 
 jobs:
