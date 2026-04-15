@@ -25,6 +25,7 @@ function displayCourse(slot) {
 export default function Dashboard({ user, coursesByDay, onUpdatePreferences, loading }) {
   const [byDay, setByDay] = useState({});
   const [courseFilter, setCourseFilter] = useState('');
+  const [calendarFilter, setCalendarFilter] = useState('all');
 
   useEffect(() => {
     const normalized = {};
@@ -73,8 +74,32 @@ export default function Dashboard({ user, coursesByDay, onUpdatePreferences, loa
             Pick one or more exact lesson slots for each weekday. The automation will book the matching time.
           </p>
         </div>
-        <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-          {selectedCount} slot{selectedCount === 1 ? '' : 's'} selected
+
+        <div className="flex flex-col items-center gap-4">
+          <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            {selectedCount} slot{selectedCount === 1 ? '' : 's'} selected
+          </div>
+          
+          <div className="flex items-center gap-2 rounded-md border border-slate-200 bg-slate-100 px-2 py-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+            <button
+              type="button"
+              onClick={() => setCalendarFilter('all')}
+              className={`rounded-md px-3 py-1 text-[11px] font-semibold ${
+                calendarFilter === 'all' ? 'bg-white text-slate-700 shadow' : 'text-slate-500'
+              }`}
+            >
+              All
+            </button>
+            <button
+              type="button"
+              onClick={() => setCalendarFilter('mine')}
+              className={`rounded-md px-3 py-1 text-[11px] font-semibold ${
+                calendarFilter === 'mine' ? 'bg-white text-slate-700 shadow' : 'text-slate-500'
+              }`}
+            >
+              My bookings
+            </button>
+          </div>
         </div>
       </div>
 
@@ -101,6 +126,11 @@ export default function Dashboard({ user, coursesByDay, onUpdatePreferences, loa
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         {WEEKDAYS.map((day) => {
           const daySlots = (coursesByDay[day] || []).filter((slot) => {
+            if (calendarFilter === 'mine') {
+              const selected = byDay[day] || [];
+              const isSelected = selected.some((item) => slotKey(item) === slotKey(normalizeSlot(slot)));
+              if (!isSelected) return false;
+            }
             if (!filterValue) return true;
             const haystack = [slot.course_label, slot.course, slot.lesson_start_time, slot.lesson_end_time]
               .filter(Boolean)
@@ -142,15 +172,12 @@ export default function Dashboard({ user, coursesByDay, onUpdatePreferences, loa
                         <div className="truncate font-semibold">
                           {displayCourse(slot)}
                         </div>
-                        <div className={`text-xs ${checked ? 'text-white/80' : 'text-slate-500'}`}>
-                          {formatTimeLabel(slot.lesson_start_time)}
-                          {slot.lesson_end_time ? ` - ${formatTimeLabel(slot.lesson_end_time)}` : ''}
-                        </div>
                       </div>
                       <span className={`ml-3 shrink-0 rounded-md px-2 py-1 text-[11px] font-semibold ${
                         checked ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500'
                       }`}>
-                        {slot.date || day}
+                          {formatTimeLabel(slot.lesson_start_time)}
+                          {slot.lesson_end_time ? ` - ${formatTimeLabel(slot.lesson_end_time)}` : ''}
                       </span>
                     </button>
                   );
