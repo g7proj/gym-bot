@@ -22,7 +22,7 @@ class UserStorage:
             raise ValueError("DATABASE_URL environment variable not set")
 
     def _connect(self):
-        return psycopg.connect(self.dsn, row_factory=dict_row)
+        return psycopg.connect(self.dsn, row_factory=dict_row, connect_timeout=10)
 
     def _normalize_time(self, value) -> Optional[str]:
         if value is None:

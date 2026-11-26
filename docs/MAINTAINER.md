@@ -87,11 +87,17 @@ The SPA runs at `http://localhost:3000`.
 
 ## 3. Local Testing
 
-### 3.1 Python Unit Tests
+### 3.1 Python Unit Tests & Dry-Run
 
 ```powershell
 cd C:\projects\gym-bot
 .\.venv\Scripts\python.exe -m unittest discover -s tests -p "test_*.py" -v
+```
+
+To simulate a full booking run locally without submitting real reservations or touching `public.booking_daily_lock`:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\book_all_users.py --dry-run
 ```
 
 Tests verify:

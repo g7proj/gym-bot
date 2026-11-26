@@ -6,6 +6,11 @@ on:
     # 04:00-07:30 UTC = 04:00-09:30 CEST / 05:00-08:30 CET. Start early to handle the github cron job time drift and ensure bookings are made as soon as slots open.
     - cron: '0,30 4-7 * * *'
   workflow_dispatch:  # Allows manual triggering for testing
+    inputs:
+      dry_run:
+        description: "Simulate booking without submitting reservations or updating daily locks"
+        type: boolean
+        default: false
 
 jobs:
   book:
@@ -29,5 +34,6 @@ jobs:
         env:
           ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DRY_RUN: ${{ inputs.dry_run }}
         run: |
           python scripts/book_all_users.py
