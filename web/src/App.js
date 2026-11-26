@@ -108,16 +108,27 @@ function App() {
     setError('');
     try {
       await runWithPending(async () => {
+        // Step 1: Supabase Auth
         const session = await signInOrSignUp(username, password);
         if (!session?.access_token) throw new Error('Missing auth session');
+
+        // Step 2: gym-login Edge Function (validates gym credentials and stores them in DB)
         const { data, error: invokeError } = await supabase.functions.invoke('gym-login', {
           body: { username, password },
           headers: { Authorization: `Bearer ${session.access_token}` },
         });
         if (invokeError) {
-          throw invokeError;
+          // Expose the full error from the Edge Function for easier debugging
+          const detail = invokeError?.message || JSON.stringify(invokeError);
+          throw new Error(`gym-login: ${detail}`);
         }
+        if (data?.error) {
+          throw new Error(`gym-login: ${data.error}`);
+        }
+
+        // Step 3: load user profile from public.users
         const currentUserId = data?.user_id || session.user.id;
+        setSessionUserId(currentUserId);
         await loadUser(currentUserId);
         await loadCourses();
         selectedByUserRef.current = false;
@@ -173,29 +184,33 @@ function App() {
         setCalendarMeta({ startDate, endDate });
 
         const today = getTodayIsoLocal();
-        const isSelectedValid = selectedDate && startDate && endDate
-          ? selectedDate >= startDate && selectedDate <= endDate
-          : Boolean(selectedDate);
+        setSelectedDate((prevSelected) => {
+          const isSelectedValid = prevSelected && startDate && endDate
+            ? prevSelected >= startDate && prevSelected <= endDate
+            : Boolean(prevSelected);
 
-        if (!selectedByUserRef.current) {
-          if (today && startDate && endDate && today >= startDate && today <= endDate) {
-            setSelectedDate(today);
-          } else if (startDate) {
-            setSelectedDate(startDate);
+          if (!selectedByUserRef.current) {
+            if (today && startDate && endDate && today >= startDate && today <= endDate) {
+              return today;
+            }
+            if (startDate) {
+              return startDate;
+            }
+            return prevSelected;
           }
-          return;
-        }
 
-        if (!isSelectedValid && startDate) {
-          setSelectedDate(startDate);
-        }
+          if (!isSelectedValid && startDate) {
+            return startDate;
+          }
+          return prevSelected;
+        });
       } catch (_err) {
         setCalendarDays([]);
         setCalendarMeta({ startDate: null, endDate: null });
         setNotice({ type: 'warning', message: 'Unable to load the calendar.' });
       }
     });
-  }, [runWithPending, selectedDate]);
+  }, [runWithPending]);
 
   const loadMyBookings = useCallback(async () => {
     return runWithPending(async () => {
@@ -245,39 +260,92 @@ function App() {
     setError('');
     try {
       await runWithPending(async () => {
-        if (!sessionUserId) {
+        const targetUserId = sessionUserId || user?.id;
+        if (!targetUserId) {
           throw new Error('Missing user session');
         }
         const cleanedByDay = preferences?.by_day || {};
-        const rows = [];
+        const normalizeTime = (value) => {
+          const text = String(value || '').trim();
+          if (!text) return '';
+          return text.length === 5 ? `${text}:00` : text;
+        };
+
+        const rowMap = new Map();
         Object.entries(cleanedByDay).forEach(([weekday, slots]) => {
+          const normalizedDay = String(weekday || '').trim().toLowerCase();
           (slots || []).forEach((slot) => {
             const course = String(slot?.course || '').trim().toLowerCase();
-            const lessonStartTime = String(slot?.lesson_start_time || '').trim();
-            if (course && lessonStartTime) {
-              rows.push({
-                user_id: sessionUserId,
-                weekday,
+            const lessonStartTime = normalizeTime(slot?.lesson_start_time);
+            if (normalizedDay && course && lessonStartTime) {
+              const key = `${normalizedDay}|${course}|${lessonStartTime}`;
+              rowMap.set(key, {
+                user_id: targetUserId,
+                weekday: normalizedDay,
                 course,
                 lesson_start_time: lessonStartTime,
               });
             }
           });
         });
-        const { error: deleteError } = await supabase
+
+        const rows = Array.from(rowMap.values());
+
+        // Fetch existing preferences first so we can upsert new slots before removing old ones.
+        const { data: existingRows, error: existingError } = await supabase
           .from('preferences')
-          .delete()
-          .eq('user_id', sessionUserId);
-        if (deleteError) {
-          throw deleteError;
+          .select('weekday, course, lesson_start_time')
+          .eq('user_id', targetUserId);
+        if (existingError) {
+          throw existingError;
         }
+
         if (rows.length) {
-          const { error: insertError } = await supabase.from('preferences').insert(rows);
-          if (insertError) {
-            throw insertError;
+          const { error: upsertError } = await supabase
+            .from('preferences')
+            .upsert(rows, {
+              onConflict: 'user_id,weekday,course,lesson_start_time',
+              ignoreDuplicates: true,
+            });
+          if (upsertError) {
+            throw upsertError;
+          }
+
+          const removedRows = (existingRows || []).filter((existing) => {
+            const key = `${String(existing.weekday || '').trim().toLowerCase()}|${String(existing.course || '').trim().toLowerCase()}|${normalizeTime(existing.lesson_start_time)}`;
+            return !rowMap.has(key);
+          });
+
+          if (removedRows.length) {
+            const deleteResults = await Promise.all(
+              removedRows.map((removed) =>
+                supabase
+                  .from('preferences')
+                  .delete()
+                  .match({
+                    user_id: targetUserId,
+                    weekday: removed.weekday,
+                    course: removed.course,
+                    lesson_start_time: removed.lesson_start_time,
+                  }),
+              ),
+            );
+            const failedDelete = deleteResults.find((result) => result.error);
+            if (failedDelete?.error) {
+              throw failedDelete.error;
+            }
+          }
+        } else if ((existingRows || []).length > 0) {
+          const { error: deleteError } = await supabase
+            .from('preferences')
+            .delete()
+            .eq('user_id', targetUserId);
+          if (deleteError) {
+            throw deleteError;
           }
         }
-        await loadUser(sessionUserId);
+
+        await loadUser(targetUserId);
         await loadCourses();
         setNotice({ type: 'success', message: 'Preferences updated.' });
       });

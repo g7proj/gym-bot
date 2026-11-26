@@ -63,6 +63,44 @@ def normalize_preference_slot(slot) -> tuple[str, str] | None:
     return normalized_course, normalized_time
 
 
+def parse_int(value: object, default: int = 0) -> int:
+    try:
+        return int(value) if value not in (None, '') else default
+    except (TypeError, ValueError):
+        return default
+
+
+def is_lesson_already_booked(lesson: dict) -> bool:
+    """Check whether the user is already booked or on the waiting list."""
+    is_user_present = parse_int(lesson.get('IsUserPresent'), 0) == 1 or lesson.get('IsUserPresent') is True
+    waiting_list_position = parse_int(
+        lesson.get('UserPositionWaitingList')
+        if lesson.get('UserPositionWaitingList') is not None
+        else lesson.get('WaitingListPosition'),
+        0,
+    )
+    return is_user_present or waiting_list_position > 0
+
+
+def find_matching_lesson(
+    target_lessons: list[dict],
+    desired_course: str,
+    desired_start_time: str,
+) -> dict | None:
+    """Return the lesson matching the exact normalized course name and start time."""
+    for item in target_lessons:
+        service_desc = str(item.get('ServiceDescription') or '').strip().lower()
+        start_time_obj = schedule.parse_api_time(item.get('StartTime'))
+        if not start_time_obj:
+            continue
+        if service_desc != desired_course:
+            continue
+        if start_time_obj.isoformat(timespec='seconds') != desired_start_time:
+            continue
+        return item
+    return None
+
+
 def main() -> None:
     if not should_run_now():
         print('Skipping run: not after 07:00 Europe/Rome.')
@@ -92,9 +130,7 @@ def main() -> None:
 
         try:
             print(f'Decrypting credentials for user {user.id}')
-            print(f'User {user.id} has username: {user.credentials.username}')
             password = crypto.decrypt(user.credentials.password)
-            print(f'Creating credentials object for user {user.id}')
             credentials = Credentials(
                 username=user.credentials.username,
                 password=password,
@@ -104,8 +140,8 @@ def main() -> None:
             client = GymClient()
             client.login(credentials)
 
-            start_dt, end_dt = schedule.get_booking_window()
-            time_start_dt, time_end_dt = schedule.get_daily_time_window()
+            start_dt, end_dt = schedule.get_booking_window(today=run_date)
+            time_start_dt, time_end_dt = schedule.get_daily_time_window(today=run_date)
             target_date = end_dt.date()
             target_weekday = schedule.WEEKDAY_EN.get(target_date.weekday())
 
@@ -141,6 +177,8 @@ def main() -> None:
                 storage.mark_booking_completed(user.id, run_date, run_id)
                 continue
 
+            booking_errors: list[str] = []
+
             for slot in desired_slots:
                 normalized_slot = normalize_preference_slot(slot)
                 if not normalized_slot:
@@ -148,31 +186,18 @@ def main() -> None:
                     continue
 
                 desired_course, desired_start_time = normalized_slot
-                matching = []
-                for item in target_lessons:
-                    service_desc = str(item.get('ServiceDescription') or '').lower()
-                    start_time_obj = schedule.parse_api_time(item.get('StartTime'))
-                    if not start_time_obj:
-                        continue
-                    if desired_course not in service_desc:
-                        continue
-                    if start_time_obj.isoformat(timespec='seconds') != desired_start_time:
-                        continue
-                    matching.append(item)
+                lesson = find_matching_lesson(target_lessons, desired_course, desired_start_time)
 
-                if not matching:
+                if not lesson:
                     print(
                         f'No exact lesson match for user {user.id} slot '
                         f'{desired_course} {desired_start_time} on {target_date}'
                     )
                     continue
 
-                lesson = matching[0]
-                available_places = int(lesson.get('AvailablePlaces', 0) or 0)
-                waiting_list_position = int(lesson.get('WaitingListPosition', 0) or 0)
-                is_user_present = bool(lesson.get('IsUserPresent'))
+                available_places = parse_int(lesson.get('AvailablePlaces'), 0)
 
-                if is_user_present or waiting_list_position > 0:
+                if is_lesson_already_booked(lesson):
                     print(
                         f'Skipping already booked slot for user {user.id}: '
                         f'{desired_course} {desired_start_time}'
@@ -212,11 +237,26 @@ def main() -> None:
                         f"Booking successful for user {user.id} lesson {lesson.get('IDLesson')}"
                     )
                 else:
-                    print(
-                        f"Booking failed for user {user.id} lesson {lesson.get('IDLesson')}"
+                    err_msg = (
+                        book_response.get('ErrorMessage')
+                        or book_response.get('Comment')
+                        or 'Booking unsuccessful'
                     )
+                    print(
+                        f"Booking failed for user {user.id} lesson {lesson.get('IDLesson')}: {err_msg}"
+                    )
+                    booking_errors.append(f"lesson {lesson.get('IDLesson')}: {err_msg}")
 
-            storage.mark_booking_completed(user.id, run_date, run_id)
+            if booking_errors:
+                storage.mark_booking_failed(
+                    user_id=user.id,
+                    run_date=run_date,
+                    run_id=run_id,
+                    error='; '.join(booking_errors),
+                    retry_minutes=LOCK_RETRY_MINUTES,
+                )
+            else:
+                storage.mark_booking_completed(user.id, run_date, run_id)
 
         except Exception as exc:
             print(f'Error processing user {user.id}: {exc}')

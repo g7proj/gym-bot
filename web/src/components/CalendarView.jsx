@@ -20,19 +20,24 @@ export default function CalendarView({
 
   const groupedDays = useMemo(() => (Array.isArray(days) ? days : []), [days]);
 
-  const myBookingsByKey = useMemo(() => {
-    const map = new Map();
+  const myBookingsLookup = useMemo(() => {
+    const byLessonId = new Map();
+    const byKey = new Map();
     (myBookings || []).forEach((item) => {
-      map.set(bookingKey(item), item);
+      if (item?.idLesson) {
+        byLessonId.set(Number(item.idLesson), item);
+      }
+      byKey.set(bookingKey(item), item);
     });
-    return map;
+    return { byLessonId, byKey };
   }, [myBookings]);
 
   const itemsByDate = useMemo(() => {
     const map = {};
     groupedDays.forEach((day) => {
       map[day.date] = (day.items || []).map((item) => {
-        const match = myBookingsByKey.get(bookingKey(item));
+        const match = (item?.idLesson && myBookingsLookup.byLessonId.get(Number(item.idLesson)))
+          || myBookingsLookup.byKey.get(bookingKey(item));
         if (!match) {
           return {
             ...item,
@@ -51,7 +56,7 @@ export default function CalendarView({
       });
     });
     return map;
-  }, [groupedDays, myBookingsByKey]);
+  }, [groupedDays, myBookingsLookup]);
 
   const visibleItemsByDate = useMemo(() => {
     if (calendarFilter === 'all') return itemsByDate;
@@ -68,12 +73,12 @@ export default function CalendarView({
     if (!meta?.startDate || !meta?.endDate) return [];
 
     const start = parseLocalDate(meta.startDate);
-    const end = parseLocalDate(meta.endDate);
+    const endParsed = parseLocalDate(meta.endDate);
 
-    end.setMonth(end.getMonth() + 1);
-    end.setDate(0);
+    if (Number.isNaN(start.getTime()) || Number.isNaN(endParsed.getTime())) return [];
 
-    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return [];
+    // Compute last day of endParsed's month without day-of-month overflow.
+    const end = new Date(endParsed.getFullYear(), endParsed.getMonth() + 1, 0);
 
     const list = [];
     const current = new Date(start);

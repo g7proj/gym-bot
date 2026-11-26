@@ -40,20 +40,45 @@ serve(async (req) => {
     await gymLogin(username, password);
 
     const email = usernameToEmail(username);
-    const { data: listData, error: listError } = await supabaseAdmin.auth.admin.listUsers({
-      page: 1,
-      perPage: 200,
-    });
 
-    if (listError) {
-      return new Response(JSON.stringify({ error: listError.message }), {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+    // Look up directly in public.users first, then paginate auth users as fallback.
+    let authUserId: string | null = null;
+    const { data: profileRow } = await supabaseAdmin
+      .from('users')
+      .select('id')
+      .eq('username', username)
+      .maybeSingle();
+
+    if (profileRow?.id) {
+      authUserId = profileRow.id;
+    } else {
+      const perPage = 200;
+      for (let page = 1; ; page += 1) {
+        const { data: listData, error: listError } = await supabaseAdmin.auth.admin.listUsers({
+          page,
+          perPage,
+        });
+
+        if (listError) {
+          return new Response(JSON.stringify({ error: listError.message }), {
+            status: 500,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+
+        const users = listData?.users || [];
+        const found = users.find((item) => item.email === email);
+        if (found?.id) {
+          authUserId = found.id;
+          break;
+        }
+        if (users.length < perPage) {
+          break;
+        }
+      }
     }
 
-    const match = (listData?.users || []).find((item) => item.email === email);
-    if (!match?.id) {
+    if (!authUserId) {
       return new Response(JSON.stringify({ error: 'Auth user not found' }), {
         status: 404,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -61,7 +86,7 @@ serve(async (req) => {
     }
 
     const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(
-      match.id,
+      authUserId,
       { password },
     );
 
@@ -80,14 +105,14 @@ serve(async (req) => {
       .eq('username', username)
       .maybeSingle();
 
-    if (existingUser?.id && existingUser.id !== match.id) {
+    if (existingUser?.id && existingUser.id !== authUserId) {
       await supabaseAdmin.from('preferences').delete().eq('user_id', existingUser.id);
       await supabaseAdmin.from('users').delete().eq('id', existingUser.id);
     }
 
     const { error: upsertError } = await supabaseAdmin.from('users').upsert(
       {
-        id: match.id,
+        id: authUserId,
         username,
         password_encrypted: encrypted,
         updated_at: new Date().toISOString(),

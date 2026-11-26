@@ -2,7 +2,7 @@
 Postgres-backed storage for users and preferences.
 """
 import os
-from datetime import date, datetime, time as time_cls, timedelta
+from datetime import date, datetime, time as time_cls, timedelta, timezone
 from typing import Dict, List, Optional, Tuple
 
 import psycopg
@@ -253,7 +253,7 @@ class UserStorage:
             run_date=run_date,
             run_id=run_id,
             status="completed",
-            lock_until=datetime.utcnow(),
+            lock_until=datetime.now(timezone.utc),
         )
 
     def mark_booking_failed(
@@ -270,5 +270,5 @@ class UserStorage:
             run_id=run_id,
             status="failed",
             error=error,
-            lock_until=datetime.utcnow() + timedelta(minutes=retry_minutes),
+            lock_until=datetime.now(timezone.utc) + timedelta(minutes=retry_minutes),
         )

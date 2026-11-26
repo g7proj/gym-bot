@@ -2,6 +2,9 @@ from __future__ import annotations
 
 from datetime import date, datetime, time, timedelta
 from typing import Any, Dict, List, Tuple
+from zoneinfo import ZoneInfo
+
+DEFAULT_TIMEZONE = "Europe/Rome"
 
 
 WEEKDAY_EN: Dict[int, str] = {
@@ -41,6 +44,10 @@ def parse_api_time(time_str: str | None) -> time | None:
         return None
 
 
+def _today_in_timezone(timezone_name: str = DEFAULT_TIMEZONE) -> date:
+    return datetime.now(ZoneInfo(timezone_name)).date()
+
+
 def get_booking_window(today: date | None = None) -> Tuple[datetime, datetime]:
     """
     Return start and end datetime for the 20-day booking window.
@@ -48,7 +55,7 @@ def get_booking_window(today: date | None = None) -> Tuple[datetime, datetime]:
     The window includes 'today' and goes up to today+19 (20 days total).
     """
     if today is None:
-        today = date.today()
+        today = _today_in_timezone()
     end_day = today + timedelta(days=19)
     start_dt = datetime.combine(today, time(0, 0, 0))
     end_dt = datetime.combine(end_day, time(0, 0, 0))
@@ -62,7 +69,7 @@ def get_daily_time_window(today: date | None = None) -> Tuple[datetime, datetime
     The date component is today (or the given date), time is fixed.
     """
     if today is None:
-        today = date.today()
+        today = _today_in_timezone()
     start_dt = datetime.combine(today, time(7, 0, 0))
     end_dt = datetime.combine(today, time(23, 59, 59))
     return start_dt, end_dt
@@ -75,7 +82,7 @@ def get_rolling_week_window(today: date | None = None, days: int = 7) -> Tuple[d
     Default is 7 days (today through today+6).
     """
     if today is None:
-        today = date.today()
+        today = _today_in_timezone()
     end_day = today + timedelta(days=days - 1)
     start_dt = datetime.combine(today, time(0, 0, 0))
     end_dt = datetime.combine(end_day, time(23, 59, 59))
