@@ -138,6 +138,73 @@ class BookingLogicTests(unittest.TestCase):
         mock_storage.mark_booking_failed.assert_called_once()
         mock_storage.mark_booking_completed.assert_not_called()
 
+    def test_main_dry_run_skips_booking_and_locks(self):
+        target_date = date(2026, 5, 20)
+        target_weekday = schedule.WEEKDAY_EN[target_date.weekday()]
+        key = base64.b64encode(os.urandom(32)).decode()
+        encrypted_pw = CryptoUtils(key=key).encrypt("gympass")
+
+        user = User(
+            id="user-1",
+            credentials=UserCredentials(username="mario", password=encrypted_pw),
+            preferences=UserPreferences(
+                by_day={
+                    target_weekday: [
+                        PreferenceSlot(course="pilates", lesson_start_time="18:00:00")
+                    ]
+                }
+            ),
+        )
+
+        mock_storage = MagicMock()
+        mock_storage.list_users.return_value = [user]
+
+        mock_client = MagicMock()
+        mock_client.list_with_mine.return_value = {
+            "Items": [
+                {
+                    "IDLesson": 101,
+                    "IDServizio": 55,
+                    "DateLesson": "2026-05-20T00:00:00",
+                    "StartTime": "1900-01-01T18:00:00",
+                    "EndTime": "1900-01-01T19:00:00",
+                    "CategoryDescription": "CORSI FIT",
+                    "ServiceDescription": "PILATES",
+                    "AvailablePlaces": 5,
+                    "IsUserPresent": 0,
+                    "UserPositionWaitingList": 0,
+                }
+            ]
+        }
+
+        buf = io.StringIO()
+        with (
+            patch.dict(os.environ, {"ENCRYPTION_KEY": key}),
+            patch.object(book_all_users, "should_run_now", return_value=True),
+            patch.object(book_all_users, "run_date_today", return_value=date(2026, 5, 1)),
+            patch.object(book_all_users, "UserStorage", return_value=mock_storage),
+            patch.object(book_all_users, "GymClient", return_value=mock_client),
+            contextlib.redirect_stdout(buf),
+        ):
+            book_all_users.main(dry_run=True)
+
+        mock_client.login.assert_called_once()
+        mock_client.list_with_mine.assert_called_once()
+        mock_client.book.assert_not_called()
+        mock_storage.acquire_booking_lock.assert_not_called()
+        mock_storage.mark_booking_completed.assert_not_called()
+        mock_storage.mark_booking_failed.assert_not_called()
+        self.assertIn("[DRY-RUN] Would book lesson 101", buf.getvalue())
+
+    def test_dry_run_cli_and_env_parsing(self):
+        self.assertTrue(book_all_users.parse_args(["--dry-run"]).dry_run)
+        self.assertFalse(book_all_users.parse_args([]).dry_run)
+
+        with patch.dict(os.environ, {"DRY_RUN": "true"}):
+            self.assertTrue(book_all_users.is_dry_run_env())
+        with patch.dict(os.environ, {"DRY_RUN": "false"}):
+            self.assertFalse(book_all_users.is_dry_run_env())
+
 
 if __name__ == "__main__":
     unittest.main()

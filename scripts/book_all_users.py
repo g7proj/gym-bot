@@ -1,4 +1,6 @@
-﻿import sys
+﻿import argparse
+import os
+import sys
 from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -101,10 +103,32 @@ def find_matching_lesson(
     return None
 
 
-def main() -> None:
+def is_dry_run_env() -> bool:
+    """Return True when DRY_RUN environment variable is truthy."""
+    return str(os.getenv("DRY_RUN", "")).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Book preferred gym classes for all configured users."
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Simulate booking without calling client.book() or modifying daily locks.",
+    )
+    return parser.parse_args(argv)
+
+
+def main(dry_run: bool | None = None) -> None:
+    effective_dry_run = is_dry_run_env() if dry_run is None else dry_run
+
     if not should_run_now():
         print('Skipping run: not after 07:00 Europe/Rome.')
         return
+
+    if effective_dry_run:
+        print('[DRY-RUN] Enabled: no bookings will be submitted and daily locks will not be modified.')
 
     storage = UserStorage()
     users = storage.list_users()
@@ -118,15 +142,19 @@ def main() -> None:
     for user in users:
         print(f'Processing user {user}')
 
-        acquired, run_id, status = storage.acquire_booking_lock(
-            user_id=user.id,
-            run_date=run_date,
-            ttl_minutes=LOCK_TTL_MINUTES,
-        )
+        run_id = None
+        if effective_dry_run:
+            print(f'[DRY-RUN] Skipping daily booking lock for user {user.id} on {run_date}')
+        else:
+            acquired, run_id, status = storage.acquire_booking_lock(
+                user_id=user.id,
+                run_date=run_date,
+                ttl_minutes=LOCK_TTL_MINUTES,
+            )
 
-        if not acquired:
-            print(f'Skipping user {user.id}: lock not acquired (status={status})')
-            continue
+            if not acquired:
+                print(f'Skipping user {user.id}: lock not acquired (status={status})')
+                continue
 
         try:
             print(f'Decrypting credentials for user {user.id}')
@@ -160,7 +188,8 @@ def main() -> None:
 
             if not desired_slots:
                 print(f'No preferences configured for {target_weekday} on user {user.id}')
-                storage.mark_booking_completed(user.id, run_date, run_id)
+                if not effective_dry_run:
+                    storage.mark_booking_completed(user.id, run_date, run_id)
                 continue
 
             target_lessons = []
@@ -174,7 +203,8 @@ def main() -> None:
 
             if not target_lessons:
                 print(f'No lessons found on {target_date} for user {user.id}')
-                storage.mark_booking_completed(user.id, run_date, run_id)
+                if not effective_dry_run:
+                    storage.mark_booking_completed(user.id, run_date, run_id)
                 continue
 
             booking_errors: list[str] = []
@@ -221,6 +251,14 @@ def main() -> None:
                 start_datetime = schedule.datetime.combine(lesson_date, start_time_obj)
                 end_datetime = schedule.datetime.combine(lesson_date, end_time_obj)
 
+                if effective_dry_run:
+                    print(
+                        f"[DRY-RUN] Would book lesson {lesson.get('IDLesson')} "
+                        f"(service {lesson.get('IDServizio')}, {lesson.get('ServiceDescription')}) "
+                        f'for user {user.id} on {start_datetime} - {end_datetime}'
+                    )
+                    continue
+
                 print(
                     f"Attempting to book lesson {lesson.get('IDLesson')} for user {user.id} "
                     f'on {start_datetime}'
@@ -247,27 +285,30 @@ def main() -> None:
                     )
                     booking_errors.append(f"lesson {lesson.get('IDLesson')}: {err_msg}")
 
-            if booking_errors:
+            if not effective_dry_run:
+                if booking_errors:
+                    storage.mark_booking_failed(
+                        user_id=user.id,
+                        run_date=run_date,
+                        run_id=run_id,
+                        error='; '.join(booking_errors),
+                        retry_minutes=LOCK_RETRY_MINUTES,
+                    )
+                else:
+                    storage.mark_booking_completed(user.id, run_date, run_id)
+
+        except Exception as exc:
+            print(f'Error processing user {user.id}: {exc}')
+            if not effective_dry_run:
                 storage.mark_booking_failed(
                     user_id=user.id,
                     run_date=run_date,
                     run_id=run_id,
-                    error='; '.join(booking_errors),
+                    error=str(exc),
                     retry_minutes=LOCK_RETRY_MINUTES,
                 )
-            else:
-                storage.mark_booking_completed(user.id, run_date, run_id)
-
-        except Exception as exc:
-            print(f'Error processing user {user.id}: {exc}')
-            storage.mark_booking_failed(
-                user_id=user.id,
-                run_date=run_date,
-                run_id=run_id,
-                error=str(exc),
-                retry_minutes=LOCK_RETRY_MINUTES,
-            )
 
 
 if __name__ == '__main__':
-    main()
+    args = parse_args()
+    main(dry_run=args.dry_run or is_dry_run_env())
