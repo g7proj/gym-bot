@@ -1,0 +1,671 @@
+openapi: 3.0.3
+info:
+  title: Gym Bot — Supabase Edge Functions API
+  version: 1.0.0
+  description: >
+    Authenticated serverless proxy endpoints deployed on Supabase Edge Functions (Deno).
+    They bridge the React frontend with the external InfoYou TeamSystem gym portal while
+    keeping user gym passwords encrypted at rest (AES-256-GCM) in Postgres.
+
+    All protected endpoints verify the Supabase JWT server-side via `supabaseAdmin.auth.getUser(token)`.
+servers:
+  - url: http://127.0.0.1:54321/functions/v1
+    description: Local Supabase stack (Docker)
+  - url: https://{projectRef}.supabase.co/functions/v1
+    description: Production Supabase project
+    variables:
+      projectRef:
+        default: your-project-ref
+        description: Supabase project reference ID
+
+tags:
+  - name: Auth
+    description: Credential verification, password sync, and account recovery
+  - name: Courses
+    description: Weekly course discovery and calendar availability
+  - name: Bookings
+    description: User bookings, class reservation, waitlist, and cancellation
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Supabase Auth access token obtained from `supabase.auth.signInWithPassword` or `signUp`.
+
+  schemas:
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+          example: Unauthorized
+
+    LoginRequest:
+      type: object
+      required: [username, password]
+      properties:
+        username:
+          type: string
+          description: Gym portal username
+          example: mario.rossi
+        password:
+          type: string
+          format: password
+          description: Gym portal password
+
+    LoginResponse:
+      type: object
+      required: [user_id, username]
+      properties:
+        user_id:
+          type: string
+          format: uuid
+        username:
+          type: string
+          example: mario.rossi
+
+    RecoverRequest:
+      type: object
+      required: [username, password]
+      properties:
+        username:
+          type: string
+          example: mario.rossi
+        password:
+          type: string
+          format: password
+
+    SuccessResponse:
+      type: object
+      required: [success]
+      properties:
+        success:
+          type: boolean
+          example: true
+
+    ChangePasswordRequest:
+      type: object
+      required: [oldPassword, newPassword]
+      properties:
+        oldPassword:
+          type: string
+          format: password
+        newPassword:
+          type: string
+          format: password
+
+    LessonSlot:
+      type: object
+      required:
+        - weekday
+        - course
+        - course_label
+        - date
+        - lesson_start_time
+        - lesson_end_time
+        - id_service
+        - id_lesson
+        - available_places
+      properties:
+        weekday:
+          type: string
+          enum: [monday, tuesday, wednesday, thursday, friday, saturday, sunday]
+        course:
+          type: string
+          description: Normalized lowercase course name used for exact slot matching
+          example: pilates
+        course_label:
+          type: string
+          description: Display course name returned by the gym portal
+          example: PILATES
+        date:
+          type: string
+          format: date
+          example: "2026-05-12"
+        lesson_start_time:
+          type: string
+          description: Start time in HH:MM:SS
+          example: "18:00:00"
+        lesson_end_time:
+          type: string
+          description: End time in HH:MM:SS
+          example: "19:00:00"
+        id_service:
+          type: integer
+          example: 55
+        id_lesson:
+          type: integer
+          example: 10123
+        available_places:
+          type: integer
+          example: 8
+
+    CoursesResponse:
+      type: object
+      required: [by_day]
+      properties:
+        by_day:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              $ref: '#/components/schemas/LessonSlot'
+
+    CalendarEntry:
+      type: object
+      properties:
+        idLesson:
+          type: integer
+        idService:
+          type: integer
+        date:
+          type: string
+          format: date
+        startTime:
+          type: string
+          example: "18:00"
+        endTime:
+          type: string
+          example: "19:00"
+        service:
+          type: string
+          example: PILATES
+        category:
+          type: string
+          example: CORSI FIT
+        availablePlaces:
+          type: integer
+        isUserPresent:
+          type: boolean
+        waitingListPosition:
+          type: integer
+        maxBookings:
+          type: integer
+        webMaxUser:
+          type: integer
+        isLocked:
+          type: integer
+
+    CalendarResponse:
+      type: object
+      required: [start_date, end_date, days]
+      properties:
+        start_date:
+          type: string
+          format: date
+          example: "2026-05-01"
+        end_date:
+          type: string
+          format: date
+          example: "2026-06-30"
+        days:
+          type: array
+          items:
+            type: object
+            required: [date, items]
+            properties:
+              date:
+                type: string
+                format: date
+              items:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CalendarEntry'
+
+    MyBookingEntry:
+      type: object
+      properties:
+        bookingId:
+          type: integer
+          nullable: true
+        idLesson:
+          type: integer
+          nullable: true
+        type:
+          type: integer
+        idDurata:
+          type: integer
+        date:
+          type: string
+          format: date
+        startTime:
+          type: string
+          example: "18:00"
+        endTime:
+          type: string
+          example: "19:00"
+        isUserPresent:
+          type: boolean
+        waitingListPosition:
+          type: integer
+        service:
+          type: string
+        category:
+          type: string
+          example: CORSI FIT
+        additionalInfo:
+          type: string
+
+    MyBookingsResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/MyBookingEntry'
+
+    BookLessonRequest:
+      type: object
+      required: [idService, idLesson, startTime, endTime]
+      properties:
+        idService:
+          type: integer
+        idLesson:
+          type: integer
+        date:
+          type: string
+          format: date
+          description: Optional if startTime/endTime already include full ISO datetime
+        startTime:
+          type: string
+          description: Either HH:MM (paired with date) or YYYY-MM-DDTHH:MM:SS
+          example: "18:00"
+        endTime:
+          type: string
+          description: Either HH:MM (paired with date) or YYYY-MM-DDTHH:MM:SS
+          example: "19:00"
+        type:
+          type: integer
+          default: 0
+        idDurata:
+          type: integer
+          default: 0
+        bookNr:
+          type: integer
+          default: 0
+        availablePlaces:
+          type: integer
+          description: When > 0 calls `/webbooking/book`; otherwise calls `/webbooking/AddWait`
+          default: 0
+        waitingListPosition:
+          type: integer
+          default: 0
+        isUserPresent:
+          type: boolean
+          default: false
+
+    CancelLessonRequest:
+      type: object
+      required: [bookingId, startTime, endTime]
+      properties:
+        bookingId:
+          type: integer
+        idLesson:
+          type: integer
+          default: 0
+        date:
+          type: string
+          format: date
+        startTime:
+          type: string
+          example: "18:00"
+        endTime:
+          type: string
+          example: "19:00"
+        type:
+          type: integer
+          default: 0
+        idDurata:
+          type: integer
+          default: 0
+        isUserPresent:
+          type: boolean
+          description: When true calls `/webbooking/cancel`; otherwise calls `/webbooking/RemoveWait`
+
+    BookingActionResponse:
+      type: object
+      required: [success, response]
+      properties:
+        success:
+          type: boolean
+          example: true
+        response:
+          type: object
+          description: Raw response payload from the InfoYou API
+
+paths:
+  /gym-login:
+    post:
+      tags: [Auth]
+      summary: Verify gym credentials and persist encrypted password
+      description: >
+        Validates credentials against the InfoYou gym portal, encrypts the password using
+        AES-256-GCM (`ENCRYPTION_KEY`), syncs the Supabase Auth password, and upserts the
+        user profile in `public.users`.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Credentials verified and persisted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '400':
+          description: Missing username or password
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Missing or invalid Supabase JWT
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Gym portal rejected credentials or upstream/DB error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /gym-recover:
+    post:
+      tags: [Auth]
+      summary: Recover Supabase Auth account using valid gym credentials
+      description: >
+        Unauthenticated endpoint used when a user's gym password changed externally and
+        no longer matches their Supabase Auth password. Validates the credentials against
+        the gym portal first, then resets the Supabase Auth password and updates `public.users`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RecoverRequest'
+      responses:
+        '200':
+          description: Supabase Auth password resynchronized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          description: Missing credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Matching Supabase Auth user not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Gym login failed or unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /gym-change-password:
+    post:
+      tags: [Auth]
+      summary: Change gym portal password and sync Supabase
+      description: >
+        Validates `oldPassword` against the gym portal, updates the password on InfoYou,
+        then updates Supabase Auth and `public.users.password_encrypted`.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangePasswordRequest'
+      responses:
+        '200':
+          description: Password updated everywhere
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          description: Missing password fields
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: User credentials not found in database
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Portal rejected password change or upstream error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /gym-courses:
+    post:
+      tags: [Courses]
+      summary: List distinct weekly lesson slots
+      description: >
+        Fetches `CORSI FIT` classes for a 7-day rolling window starting tomorrow (in `APP_TIMEZONE`,
+        default `Europe/Rome`) and returns deduplicated lesson slots grouped by weekday.
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Weekly lesson slots grouped by weekday
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CoursesResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Stored user credentials not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Upstream gym API or decryption error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /gym-calendar:
+    post:
+      tags: [Courses]
+      summary: List bookable classes for current and next month
+      description: >
+        Fetches `CORSI FIT` classes across the current and following calendar month
+        and groups them by date (`YYYY-MM-DD`).
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Calendar availability grouped by date
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CalendarResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Stored user credentials not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Upstream gym API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /gym-mybooks:
+    post:
+      tags: [Bookings]
+      summary: List authenticated user's active bookings and waitlist entries
+      description: Retrieves the user's current `CORSI FIT` bookings and waitlist positions.
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Normalized list of active user bookings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MyBookingsResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Stored user credentials not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Upstream gym API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /gym-book:
+    post:
+      tags: [Bookings]
+      summary: Book a lesson or join its waitlist
+      description: >
+        Books a seat if `availablePlaces > 0`, otherwise registers the user on the waitlist.
+        Rejects requests with `409 Conflict` if `isUserPresent` is true or `waitingListPosition > 0`.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BookLessonRequest'
+      responses:
+        '200':
+          description: Booking or waitlist request succeeded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BookingActionResponse'
+        '400':
+          description: Missing required booking fields
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Stored user credentials not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Already booked or already on waitlist
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Upstream gym API rejected the booking
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /gym-cancel:
+    post:
+      tags: [Bookings]
+      summary: Cancel a confirmed booking or leave a waitlist
+      description: >
+        Calls `/webbooking/cancel` when `isUserPresent` is true, or `/webbooking/RemoveWait`
+        when removing a waitlist entry.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CancelLessonRequest'
+      responses:
+        '200':
+          description: Cancellation succeeded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BookingActionResponse'
+        '400':
+          description: Missing required cancel fields
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Stored user credentials not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Upstream gym API rejected the cancellation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'

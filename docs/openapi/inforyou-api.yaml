@@ -1,0 +1,466 @@
+openapi: 3.0.3
+info:
+  title: InfoYou TeamSystem — External Gym Portal API (Subset Used by Gym Bot)
+  version: 1.0.0
+  description: >
+    Reverse-engineered subset of the external InfoYou TeamSystem web booking API consumed by
+    both `supabase/functions/_shared/gymClient.ts` (Deno) and `src/gym_bot/client.py` (Python).
+
+    Every request requires the portal `AppToken` and legacy `IYESUrl` in both HTTP headers
+    and the `Cookie` header. Authenticated requests additionally require `AuthToken`.
+servers:
+  - url: https://inforyou.teamsystem.com/dream/api/v1
+    description: InfoYou TeamSystem production API
+
+tags:
+  - name: Security
+    description: Session authentication and password management
+  - name: WebBooking
+    description: Services, schedule lookup, user bookings, and reservations
+
+components:
+  securitySchemes:
+    GymAuthToken:
+      type: apiKey
+      in: header
+      name: AuthToken
+      description: Session token returned in `Item` by `/security/webauthenticate`.
+
+  parameters:
+    AppTokenHeader:
+      name: AppToken
+      in: header
+      required: true
+      schema:
+        type: string
+      description: Portal application token (configurable via `GYM_APP_TOKEN`).
+    IyesUrlHeader:
+      name: IYESUrl
+      in: header
+      required: true
+      schema:
+        type: string
+        example: http://95.130.140.135:65432
+      description: Legacy backend host required by the portal.
+
+  schemas:
+    PortalEnvelope:
+      type: object
+      properties:
+        Successful:
+          type: boolean
+        ErrorMessage:
+          type: string
+          nullable: true
+        Comment:
+          type: string
+          nullable: true
+
+    AuthenticateResponse:
+      allOf:
+        - $ref: '#/components/schemas/PortalEnvelope'
+        - type: object
+          properties:
+            Item:
+              type: string
+              description: AuthToken string to send on subsequent requests
+
+    ListWithMineRequest:
+      type: object
+      required: [CompanyID, Types, StartDate, EndDate, TimeStart, TimeEnd]
+      properties:
+        CompanyID:
+          type: integer
+          example: 2
+        Types:
+          type: array
+          items:
+            type: integer
+          example: []
+        StartDate:
+          type: string
+          description: Local ISO timestamp without timezone offset
+          example: "2026-05-01T00:00:00"
+        EndDate:
+          type: string
+          example: "2026-05-20T00:00:00"
+        TimeStart:
+          type: string
+          example: "2026-05-01T07:00:00"
+        TimeEnd:
+          type: string
+          example: "2026-05-01T23:59:59"
+
+    PortalLessonItem:
+      type: object
+      properties:
+        IDLesson:
+          type: integer
+        IDServizio:
+          type: integer
+        DateLesson:
+          type: string
+          example: "2026-05-20T00:00:00"
+        StartTime:
+          type: string
+          example: "1900-01-01T18:00:00"
+        EndTime:
+          type: string
+          example: "1900-01-01T19:00:00"
+        ServiceDescription:
+          type: string
+          example: PILATES
+        CategoryDescription:
+          type: string
+          example: CORSI FIT
+        AvailablePlaces:
+          type: integer
+        IsUserPresent:
+          type: integer
+          description: 1 if booked, 0 otherwise
+        UserPositionWaitingList:
+          type: integer
+          description: Waitlist position (> 0 if on waitlist, 0 otherwise)
+        MaxPrenotazioni:
+          type: integer
+        WebMaxPostiUtente:
+          type: integer
+        IsLocked:
+          type: integer
+
+    ListWithMineResponse:
+      allOf:
+        - $ref: '#/components/schemas/PortalEnvelope'
+        - type: object
+          properties:
+            Items:
+              type: array
+              items:
+                $ref: '#/components/schemas/PortalLessonItem'
+
+    MyBooksItem:
+      type: object
+      properties:
+        BookingID:
+          type: integer
+        IDLesson:
+          type: integer
+        Type:
+          type: integer
+        IDDurata:
+          type: integer
+        StartTime:
+          type: string
+          example: "2026-05-20T18:00:00"
+        EndTime:
+          type: string
+          example: "2026-05-20T19:00:00"
+        IsUserPresent:
+          type: integer
+        UserPositionWaitingList:
+          type: integer
+        ServiceDescription:
+          type: string
+        CategoryDescription:
+          type: string
+        AdditionalInfo:
+          type: string
+
+    MyBooksResponse:
+      allOf:
+        - $ref: '#/components/schemas/PortalEnvelope'
+        - type: object
+          properties:
+            Items:
+              type: array
+              items:
+                $ref: '#/components/schemas/MyBooksItem'
+
+    BookOrWaitPayload:
+      type: object
+      required: [BookingID, StartTime, EndTime, IDLesson]
+      properties:
+        Note:
+          type: string
+          default: ""
+        BookNr:
+          type: integer
+          default: 0
+        BookingID:
+          type: integer
+          description: Maps to `IDServizio` from `listwithmine`
+        StartTime:
+          type: string
+          example: "2026-05-20T18:00:00"
+        EndTime:
+          type: string
+          example: "2026-05-20T19:00:00"
+        IDLesson:
+          type: integer
+        Type:
+          type: integer
+          default: 0
+        IDDurata:
+          type: integer
+          default: 0
+
+    CancelOrRemoveWaitPayload:
+      type: object
+      required: [BookingID, StartTime, EndTime]
+      properties:
+        BookingID:
+          type: integer
+          description: Booking identifier returned by `mybooks`
+        IDLesson:
+          type: integer
+          default: 0
+        Type:
+          type: integer
+          default: 0
+        StartTime:
+          type: string
+          example: "2026-05-20T18:00:00"
+        EndTime:
+          type: string
+          example: "2026-05-20T19:00:00"
+        IDDurata:
+          type: integer
+          default: 0
+
+paths:
+  /security/webauthenticate:
+    get:
+      tags: [Security]
+      summary: Authenticate user and obtain AuthToken
+      description: >
+        Provider-defined GET endpoint that returns a session token in `Item`.
+        Never log the full request URL because `password` is sent as a query parameter.
+      parameters:
+        - $ref: '#/components/parameters/AppTokenHeader'
+        - $ref: '#/components/parameters/IyesUrlHeader'
+        - name: login
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: password
+          in: query
+          required: true
+          schema:
+            type: string
+            format: password
+        - name: companyid
+          in: query
+          required: true
+          schema:
+            type: integer
+            example: 2
+        - name: confirmlink
+          in: query
+          required: true
+          schema:
+            type: string
+            example: https://inforyou.teamsystem.com/dream/account-verification/
+      responses:
+        '200':
+          description: Authentication result envelope
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthenticateResponse'
+
+  /security/changepassword:
+    get:
+      tags: [Security]
+      summary: Change the authenticated user's gym portal password
+      security:
+        - GymAuthToken: []
+      parameters:
+        - $ref: '#/components/parameters/AppTokenHeader'
+        - $ref: '#/components/parameters/IyesUrlHeader'
+        - name: oldpwd
+          in: query
+          required: true
+          schema:
+            type: string
+            format: password
+        - name: newpwd
+          in: query
+          required: true
+          schema:
+            type: string
+            format: password
+      responses:
+        '200':
+          description: Password change result envelope
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PortalEnvelope'
+
+  /webbooking/services:
+    get:
+      tags: [WebBooking]
+      summary: List bookable services for a company
+      security:
+        - GymAuthToken: []
+      parameters:
+        - $ref: '#/components/parameters/AppTokenHeader'
+        - $ref: '#/components/parameters/IyesUrlHeader'
+        - name: companyID
+          in: query
+          required: true
+          schema:
+            type: integer
+            example: 2
+      responses:
+        '200':
+          description: Available services envelope
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PortalEnvelope'
+
+  /webbooking/listwithmine:
+    post:
+      tags: [WebBooking]
+      summary: List lessons and user booking status within a date/time window
+      security:
+        - GymAuthToken: []
+      parameters:
+        - $ref: '#/components/parameters/AppTokenHeader'
+        - $ref: '#/components/parameters/IyesUrlHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ListWithMineRequest'
+      responses:
+        '200':
+          description: Lessons matching the requested window
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListWithMineResponse'
+
+  /webbooking/mybooks:
+    get:
+      tags: [WebBooking]
+      summary: List current bookings and waitlist entries for the authenticated user
+      security:
+        - GymAuthToken: []
+      parameters:
+        - $ref: '#/components/parameters/AppTokenHeader'
+        - $ref: '#/components/parameters/IyesUrlHeader'
+        - name: companyID
+          in: query
+          required: true
+          schema:
+            type: integer
+            example: 2
+        - name: Type
+          in: query
+          required: false
+          schema:
+            type: string
+            default: ""
+      responses:
+        '200':
+          description: User bookings envelope
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MyBooksResponse'
+
+  /webbooking/book:
+    post:
+      tags: [WebBooking]
+      summary: Reserve a seat in a lesson
+      security:
+        - GymAuthToken: []
+      parameters:
+        - $ref: '#/components/parameters/AppTokenHeader'
+        - $ref: '#/components/parameters/IyesUrlHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BookOrWaitPayload'
+      responses:
+        '200':
+          description: Booking result envelope
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PortalEnvelope'
+
+  /webbooking/AddWait:
+    post:
+      tags: [WebBooking]
+      summary: Join the waiting list for a full lesson
+      security:
+        - GymAuthToken: []
+      parameters:
+        - $ref: '#/components/parameters/AppTokenHeader'
+        - $ref: '#/components/parameters/IyesUrlHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BookOrWaitPayload'
+      responses:
+        '200':
+          description: Waitlist result envelope
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PortalEnvelope'
+
+  /webbooking/cancel:
+    post:
+      tags: [WebBooking]
+      summary: Cancel a confirmed booking
+      security:
+        - GymAuthToken: []
+      parameters:
+        - $ref: '#/components/parameters/AppTokenHeader'
+        - $ref: '#/components/parameters/IyesUrlHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CancelOrRemoveWaitPayload'
+      responses:
+        '200':
+          description: Cancellation result envelope
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PortalEnvelope'
+
+  /webbooking/RemoveWait:
+    post:
+      tags: [WebBooking]
+      summary: Remove the user from a lesson waiting list
+      security:
+        - GymAuthToken: []
+      parameters:
+        - $ref: '#/components/parameters/AppTokenHeader'
+        - $ref: '#/components/parameters/IyesUrlHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CancelOrRemoveWaitPayload'
+      responses:
+        '200':
+          description: Waitlist removal result envelope
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PortalEnvelope'

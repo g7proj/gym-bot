@@ -1,223 +1,71 @@
 # gym-bot
 
-Personal automation for checking available gym courses via the `inforyou.teamsystem.com` API, written in Python.
+Automated multi-user gym class booking platform for the InfoYou TeamSystem portal (`inforyou.teamsystem.com`), combining a React SPA, Supabase (Postgres + Auth + Edge Functions), and a scheduled Python booking runner.
 
-## Features
+## Architecture
 
-- Authenticate with the gym portal using username and password
-- Retrieve available lessons and filter them by weekday + keywords
-- Supabase Edge Functions for credential verification
-- Supabase Postgres storage for users and preferences
-- React frontend for login + preferences management
-- GitHub Actions job for automated daily booking
-
-## Supabase (Edge Functions) Setup (Render-free)
-
-This replaces the FastAPI backend with Supabase Edge Functions + RLS.
-
-1. Create tables + policies in Supabase (SQL editor):
-
-```sql
--- See db/supabase.sql
+```mermaid
+flowchart LR
+  User["User Browser"] --> SPA["React SPA (GitHub Pages)"]
+  SPA -->|Supabase Auth + RLS| DB["Supabase Postgres"]
+  SPA -->|JWT Bearer| EF["Supabase Edge Functions (Deno)"]
+  EF -->|AES-256-GCM Decrypt| DB
+  EF -->|HTTPS| Portal["InfoYou Gym Portal API"]
+  GHA["GitHub Actions Cron"] -->|psycopg + Lock| DB
+  GHA -->|HTTPS| Portal
 ```
 
-2. Configure Supabase secrets for the Edge Functions:
+### Components
 
-- `ENCRYPTION_KEY` (base64-encoded 32-byte key for AES-GCM)
-- Optional: `GYM_APP_TOKEN` (if the portal token changes)
+- **Frontend (`web/`)**: React 18 + Tailwind CSS SPA for sign-in, weekly lesson slot preferences, interactive calendar view, and manual booking/cancellation. Deployed to GitHub Pages via `.github/workflows/pages.yml`.
+- **Edge Functions (`supabase/functions/`)**: Deno serverless endpoints that validate Supabase JWTs via `auth.getUser()`, decrypt stored gym credentials, and proxy requests to the gym portal.
+- **Database (`supabase/migrations/`)**: Postgres schema with Row Level Security (RLS) on `public.users`, `public.preferences`, and `public.booking_daily_lock`, plus the atomic `acquire_booking_lock` PL/pgSQL function.
+- **Booking Automation (`scripts/book_all_users.py`, `src/gym_bot/`, `api/`, `utils/`)**: Scheduled Python job (`.github/workflows/book.yml`) running every 30 minutes in the morning window (`04:00-07:30 UTC`, gated to `>= 07:00 Europe/Rome`) with per-user daily distributed locking and automatic retries on failure.
 
-Note: Supabase automatically provides `SUPABASE_URL`, `SUPABASE_ANON_KEY`,
-`SUPABASE_SERVICE_ROLE_KEY`, and `SUPABASE_DB_URL` to Edge Functions. These
-system secrets appear in the dashboard and cannot be removed, but you do not
-need to add them manually.
+## Quick Start (Local Development)
 
-3. Deploy Edge Functions from `supabase/functions`:
-
-- `gym-login`
-- `gym-courses`
-
-4. Configure frontend env vars (see `C:\projects\gym-bot\web\README.md`).
-
-Note: In Supabase Dashboard -> Edge Functions, keep "Verify JWT" disabled for
-`gym-login` and `gym-courses`. The functions still validate the token via
-`supabase.auth.getUser()`, but the gateway JWT check is unreliable for this setup.
-
-## GitHub Pages (Production)
-
-Production Pages are built via GitHub Actions (no `docs/` in the repo).
-
-Required repository secrets:
-
-- `REACT_APP_SUPABASE_URL` (production Supabase URL)
-- `REACT_APP_SUPABASE_ANON_KEY` (production publishable key)
-
-In GitHub: Settings -> Pages -> Source = GitHub Actions.
-
-## Requirements
-
-- Python 3.11+ in `PATH`
-- Internet connection and valid gym portal credentials
-- Supabase project (for DB + Edge Functions)
-- Node.js 18+ (only if you want to run the React frontend)
-
-## Local Setup (Windows / PowerShell)
-
-All commands run from the project root:
+Prerequisites: **Python 3.11+**, **Node.js 18+**, **Docker Desktop**, and **Supabase CLI**.
 
 ```powershell
-cd C:\projects\gym-bot
-```
-
-### 1. Create and Activate Virtual Environment
-
-```powershell
+# 1. Python environment
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
-```
-
-If script execution is blocked:
-
-```powershell
-Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
-```
-
-### 2. Install Dependencies
-
-```powershell
 pip install -r requirements.txt
-```
 
-### 3. Generate Encryption Key
-
-This key is required by the booking job to decrypt passwords stored in Supabase.
-
-```powershell
-python -c "import base64, os; print(base64.b64encode(os.urandom(32)).decode())"
-```
-
-Keep the output, you will use it as `ENCRYPTION_KEY` in Supabase and GitHub Actions.
-
-### 4. Configure Environment Variables
-
-Create a `.env` file in the project root (only needed for the booking script if you run it locally):
-
-```dotenv
-ENCRYPTION_KEY=your_generated_key_here
-DATABASE_URL=your_database_connection_string
-```
-
-If the gym changes the app token, you can optionally add:
-
-```dotenv
-GYM_APP_TOKEN=APP_TOKEN_VALUE_FROM_PORTAL
-```
-
-### 5. (Optional) Use Local Postgres (Docker)
-
-If you want to test the booking script locally with Postgres, you can run a local DB:
-
-```powershell
-docker run --name gym-bot-db -e POSTGRES_PASSWORD=postgres -e POSTGRES_USER=postgres -e POSTGRES_DB=gym_bot -p 5432:5432 -d postgres:16
-```
-
-Initialize the schema:
-
-```powershell
-Get-Content db\schema.sql | docker exec -i gym-bot-db psql -U postgres -d gym_bot
-```
-
-If the container already exists, just start it:
-
-```powershell
-docker start gym-bot-db
-```
-
-Use this connection string in your `.env`:
-
-```dotenv
-DATABASE_URL=postgresql://postgres:postgres@localhost:5432/gym_bot
-```
-
-### 6. Local Supabase Dev (Recommended for UI testing)
-
-This starts the full Supabase stack locally (Auth + DB + Edge Functions).
-
-```powershell
+# 2. Start local Supabase stack (Auth + Postgres + Edge Functions)
 .\scripts\dev-start.ps1
+
+# 3. Start React frontend (http://localhost:3000)
+cd web
+npm install
+npm start
 ```
 
-The script will:
+Run Python unit tests:
 
-- start Supabase locally (Docker)
-- write `supabase\.env` and `supabase\functions\.env` (UTF-8, no BOM) with `ENCRYPTION_KEY` + optional `GYM_APP_TOKEN`
-- set `web\.env.development` with local URL + publishable key
-- reset the local database schema
+```powershell
+.\.venv\Scripts\python.exe -m unittest discover -s tests -p "test_*.py" -v
+```
 
-If you see `failed to parse environment file: .env` during startup, delete `supabase\.env` and rerun the script.
-
-To stop the local stack:
+Stop the local Supabase stack:
 
 ```powershell
 .\scripts\dev-stop.ps1
 ```
 
-Ignored local files (recreated by scripts/CLI):
+## Documentation
 
-- `C:\projects\gym-bot\.env.local` (local secrets cache)
-- `C:\projects\gym-bot\web\.env.development`
-- `C:\projects\gym-bot\supabase\.branches\`
-- `C:\projects\gym-bot\supabase\.temp\`
-- `C:\projects\gym-bot\web\supabase\`
+- **Maintainer Guide** (setup, local testing, deployment runbook, secret rotation, troubleshooting): [docs/MAINTAINER.md](docs/MAINTAINER.md)
+- **OpenAPI / Swagger Specifications**: [docs/openapi/README.md](docs/openapi/README.md)
+  - [Supabase Edge Functions API](docs/openapi/edge-functions.yaml)
+  - [External InfoYou Gym Portal API](docs/openapi/inforyou-api.yaml)
+- **AI Agent Instructions**: [AGENTS.md](AGENTS.md)
+- **Project Context**: [docs/project_context.md](docs/project_context.md)
 
-### 7. (Optional) Run the React Frontend
+## Security Highlights
 
-```powershell
-cd web
-npm install
-```
-
-The script writes `web\.env.development` with the local Supabase URL and publishable key.
-
-Start the frontend:
-
-```powershell
-npm start
-```
-
-The web app runs at `http://localhost:3000`.
-
-## GitHub Actions Automation
-
-The project includes `.github/workflows/book.yml` which runs daily at 07:XX Europe/Rome.
-
-Required secrets:
-
-- `ENCRYPTION_KEY`: AES-GCM key used to decrypt stored passwords
-- `DATABASE_URL`: Postgres connection string reachable by the runner
-
-The workflow runs `scripts/book_all_users.py`.
-
-## Reliable Booking Automation (Edge Functions)
-
-To improve reliability, run the booking edge function every 30 minutes during a
-morning window (ex: 07:00-09:30 Europe/Rome). Each run checks:
-
-- It is after 07:00 local time
-- The user has not already booked today
-- A distributed lock can be acquired in Supabase
-
-Use a single-row-per-user-per-day lock so the booking job is idempotent and safe
-to re-run if the cron triggers multiple times or the provider is unreliable.
-
-## Project Structure
-
-- `src/gym_bot/client.py`: HTTP calls (login, lessons, booking)
-- `src/gym_bot/config.py`: credentials + token config
-- `src/gym_bot/schedule.py`: time windows and filters
-- `api/storage.py`: Postgres storage layer
-- `scripts/book_all_users.py`: GitHub Actions job
-
-## Security Notes
-
-- **Never** commit real credentials
-- Prefer environment variables
+- Gym passwords are encrypted at rest with **AES-256-GCM** (`[12-byte IV | ciphertext]`, base64-encoded), compatible across Python (`cryptography`) and Deno (`Web Crypto API`).
+- Edge Functions cryptographically verify Supabase JWTs server-side using `supabaseAdmin.auth.getUser(token)` (`supabase/functions/_shared/auth.ts`).
+- CORS origins are restricted via `supabase/functions/_shared/http.ts` and configurable with `ALLOWED_ORIGINS`.
+- Row Level Security enforces per-user isolation on `public.users` and `public.preferences`.
+- Never commit `.env`, `.env.local`, `web/.env.development`, or real credentials. Use `.env.example` and `web/.env.example` as templates.

@@ -3,16 +3,13 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { encryptString } from '../_shared/crypto.ts';
 import { requireAuth } from '../_shared/auth.ts';
 import { gymLogin } from '../_shared/gymClient.ts';
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+import { getCorsHeaders, handleOptions } from '../_shared/http.ts';
 
 // Validate gym credentials and store them encrypted for the logged-in user.
 serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req);
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
+    return handleOptions(corsHeaders);
   }
 
   try {

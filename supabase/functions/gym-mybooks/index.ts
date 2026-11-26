@@ -3,16 +3,13 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { decryptString } from '../_shared/crypto.ts';
 import { requireAuth } from '../_shared/auth.ts';
 import { gymLogin, myBookings } from '../_shared/gymClient.ts';
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+import { getCorsHeaders, handleOptions } from '../_shared/http.ts';
 
 // Return the user's current bookings in a normalized, UI-friendly format.
 serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req);
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
+    return handleOptions(corsHeaders);
   }
 
   try {

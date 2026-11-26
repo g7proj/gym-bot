@@ -3,16 +3,13 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { decryptString } from '../_shared/crypto.ts';
 import { requireAuth } from '../_shared/auth.ts';
 import { addWait, bookLesson, gymLogin } from '../_shared/gymClient.ts';
+import { getCorsHeaders, handleOptions } from '../_shared/http.ts';
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
-
-// Book a class or place the user in the waitlist depending on availability.
+// Book a class or place the user on the waitlist depending on seat availability.
 serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req);
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
+    return handleOptions(corsHeaders);
   }
 
   try {

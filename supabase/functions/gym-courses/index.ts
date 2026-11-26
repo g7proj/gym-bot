@@ -3,6 +3,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { decryptString } from '../_shared/crypto.ts';
 import { requireAuth } from '../_shared/auth.ts';
 import { gymLogin, listWithMine } from '../_shared/gymClient.ts';
+import { getCorsHeaders, handleOptions } from '../_shared/http.ts';
 import {
   formatApiTime,
   formatLocalIsoSeconds,
@@ -11,11 +12,6 @@ import {
   parseApiDate,
   weekdayName,
 } from '../_shared/schedule.ts';
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
 
 type LessonSlot = {
   weekday: string;
@@ -31,8 +27,9 @@ type LessonSlot = {
 
 // Return distinct lesson slots grouped by weekday for the next rolling week.
 serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req);
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
+    return handleOptions(corsHeaders);
   }
 
   try {

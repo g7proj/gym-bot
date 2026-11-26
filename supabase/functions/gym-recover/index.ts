@@ -2,11 +2,7 @@ import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { encryptString } from '../_shared/crypto.ts';
 import { gymLogin } from '../_shared/gymClient.ts';
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+import { getCorsHeaders, handleOptions } from '../_shared/http.ts';
 
 function usernameToEmail(username: string): string {
   const cleaned = String(username || '').trim().toLowerCase();
@@ -15,8 +11,9 @@ function usernameToEmail(username: string): string {
 
 // Recover a Supabase Auth account by validating gym credentials first.
 serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req);
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
+    return handleOptions(corsHeaders);
   }
 
   try {
