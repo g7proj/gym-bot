@@ -344,8 +344,7 @@ paths:
       summary: Verify gym credentials and persist encrypted password
       description: >
         Validates credentials against the InfoYou gym portal, encrypts the password using
-        AES-256-GCM (`ENCRYPTION_KEY`), syncs the Supabase Auth password, and upserts the
-        user profile in `public.users`.
+        AES-256-GCM (`ENCRYPTION_KEY`), and upserts the user profile in `public.users`.
       security:
         - BearerAuth: []
       requestBody:
