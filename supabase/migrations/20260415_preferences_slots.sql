@@ -1,7 +1,16 @@
--- Rebuild preferences as exact lesson slots.
--- Existing preference rows can be discarded before applying this migration.
-
-drop table if exists public.preferences cascade;
+-- Rebuild preferences as exact lesson slots when migrating from the legacy schema.
+do $$
+begin
+  if not exists (
+    select 1
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'preferences'
+      and column_name = 'lesson_start_time'
+  ) then
+    drop table if exists public.preferences cascade;
+  end if;
+end $$;
 
 create table if not exists public.preferences (
     user_id uuid not null references public.users(id) on delete cascade,
@@ -18,6 +27,8 @@ create index if not exists idx_preferences_weekday on public.preferences (weekda
 create index if not exists idx_preferences_start_time on public.preferences (lesson_start_time);
 
 alter table public.preferences enable row level security;
+
+drop policy if exists "Users can manage own preferences" on public.preferences;
 
 create policy "Users can manage own preferences"
     on public.preferences
