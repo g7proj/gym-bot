@@ -58,6 +58,12 @@ jobs:
         working-directory: web
         run: npm install --no-audit --no-fund
 
+      - name: Run frontend unit tests
+        working-directory: web
+        env:
+          CI: true
+        run: npm test -- --watchAll=false
+
       - name: Build React application
         working-directory: web
         env:
