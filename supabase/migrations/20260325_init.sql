@@ -43,11 +43,15 @@ alter table public.users enable row level security;
 alter table public.preferences enable row level security;
 alter table public.booking_daily_lock enable row level security;
 
+drop policy if exists "Users can manage own profile" on public.users;
+
 create policy "Users can manage own profile"
     on public.users
     for all
     using (auth.uid() = id)
     with check (auth.uid() = id);
+
+drop policy if exists "Users can manage own preferences" on public.preferences;
 
 create policy "Users can manage own preferences"
     on public.preferences
