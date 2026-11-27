@@ -19,9 +19,9 @@ Instructions for AI coding agents working on the **gym-bot** repository.
   - `_shared/autoBook.ts` — core automated booking engine and constant-time `CRON_SECRET` verifier.
   - `_tests/` — offline Deno unit test suites (`gymSession_test.ts`, `autoBook_test.ts`).
   - Endpoints: `gym-login`, `gym-recover`, `gym-change-password`, `gym-courses`, `gym-calendar`, `gym-mybooks`, `gym-book`, `gym-cancel`, `gym-auto-book`.
-- `supabase/migrations/` — Authoritative Postgres schema, RLS policies, and `acquire_booking_lock` PL/pgSQL function.
+- `supabase/migrations/` — Authoritative Postgres schema, RLS policies, `acquire_booking_lock`, and `pg_cron` + `pg_net` 07:01 `Europe/Rome` scheduler (`public.trigger_gym_auto_book`).
 - `scripts/` — Local Windows PowerShell development scripts (`dev-start.ps1`, `dev-stop.ps1`).
-- `.github/workflows/` — `ci.yml` (Deno + Jest + React build), `pages.yml` (GitHub Pages deploy), `deploy-supabase.yml` (migrations + Edge Functions deploy), and `book.yml` (scheduled `gym-auto-book` trigger).
+- `.github/workflows/` — `ci.yml` (Deno + Jest + React build), `pages.yml` (GitHub Pages deploy), `deploy-supabase.yml` (migrations + Edge Functions deploy), and `book.yml` (daily backup + Free-Tier keep-alive trigger for `gym-auto-book`).
 - `docs/openapi/` — OpenAPI 3.0.3 specifications for both Edge Functions and the external InfoYou API.
 - `docs/MAINTAINER.md` — Setup, testing, deployment, and security runbook.
 

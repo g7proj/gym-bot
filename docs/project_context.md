@@ -25,7 +25,7 @@ Multi-user gym class booking automation system built on a unified TypeScript/Jav
 
 ## Automated Booking Logic (`gym-auto-book`)
 
-- Scheduled via `.github/workflows/book.yml` (`0,30 4-7 * * *` UTC, gated to `>= 07:00 Europe/Rome`).
+- Triggered punctually at **07:01:00 `Europe/Rome`** via Supabase `pg_cron` + `pg_net` (`20261129_pg_cron_auto_book.sql`, reading URL and `CRON_SECRET` from Supabase Vault), with a single daily backup and Free-Tier keep-alive run in `.github/workflows/book.yml` (`17 7 * * *` UTC).
 - Acquires an atomic per-user daily lock in `public.booking_daily_lock` via `acquire_booking_lock`.
 - Evaluates the 20-day booking window (`today` .. `today + 19` in `Europe/Rome`) and matches exact course name + `HH:MM:SS` start time on `today + 19`.
 - Skips lessons where `IsUserPresent == 1` or `UserPositionWaitingList > 0`.

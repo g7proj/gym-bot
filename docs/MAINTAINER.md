@@ -183,10 +183,28 @@ Get-ChildItem supabase\functions -Directory |
   ForEach-Object { supabase functions deploy $_.Name --no-verify-jwt }
 ```
 
-### 4.3 Deploying Frontend & Running the Booking Cron
+### 4.3 Deploying Frontend & Scheduling Automated Bookings
 
 - **Frontend (GitHub Pages)**: automatically built and deployed on every push to `main` via `.github/workflows/pages.yml` (Settings → Pages → Source = **GitHub Actions**).
-- **Daily Booking Job**: `.github/workflows/book.yml` triggers `gym-auto-book` every 30 minutes (`0,30 4-7 * * *` UTC) or manually via **Actions → Daily Gym Booking → Run workflow** (supports `dry_run` and `force_time` checkboxes).
+- **Primary 07:01 Scheduler (Supabase `pg_cron` + `pg_net` + `Vault`)**:
+  - Migration `20261129_pg_cron_auto_book.sql` registers the `gym-auto-book-daily` cron job (`1 5,6 * * *` UTC, filtered in `public.trigger_gym_auto_book()` to fire only at **07:01:00 `Europe/Rome`** across both CET and CEST).
+  - Configure the two required Vault secrets **once** in the production **Supabase SQL Editor**:
+    ```sql
+    -- Replace placeholders with your production project ref and CRON_SECRET
+    select vault.create_secret(
+      'https://<your-project-ref>.supabase.co/functions/v1/gym-auto-book',
+      'gym_auto_book_url',
+      'Production gym-auto-book Edge Function URL'
+    );
+
+    select vault.create_secret(
+      '<your-cron-secret>',
+      'gym_cron_secret',
+      'Bearer secret for gym-auto-book'
+    );
+    ```
+  - To update an existing Vault secret later (e.g. when rotating `CRON_SECRET`), update it via Dashboard → **Integrations → Vault** or `vault.update_secret(id, '<new-secret>')`.
+- **Backup & Keep-Alive Job (`.github/workflows/book.yml`)**: runs once daily (`17 7 * * *` UTC) to keep the Supabase Free Tier project active (preventing the 7-day inactivity pause) and retry any failed 07:01 booking, and can also be triggered manually via **Actions → Daily Gym Booking → Run workflow** (`dry_run` / `force_time`).
 
 ---
 
@@ -207,7 +225,7 @@ Get-ChildItem supabase\functions -Directory |
 ### 5.3 Rotating `CRON_SECRET`
 
 1. Generate a new random secret string.
-2. Update `CRON_SECRET` in both **Supabase Secrets** and **GitHub Repository Secrets**.
+2. Update `CRON_SECRET` in **Supabase Edge Function Secrets**, **Supabase Vault** (`gym_cron_secret`), and **GitHub Repository Secrets**.
 3. Trigger a manual `Daily Gym Booking` dry-run in GitHub Actions to verify `200 OK`.
 
 ---

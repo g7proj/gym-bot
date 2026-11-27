@@ -7,9 +7,10 @@ Automated multi-user gym class booking platform for the InfoYou TeamSystem porta
 ```mermaid
 flowchart LR
   User["User Browser"] --> SPA["React SPA (GitHub Pages)"]
-  SPA -->|Supabase Auth + RLS| DB["Supabase Postgres"]
+  SPA -->|Supabase Auth + RLS| DB["Supabase Postgres + pg_cron"]
   SPA -->|JWT Bearer| EF["Supabase Edge Functions (Deno)"]
-  GHA["GitHub Actions Cron"] -->|Bearer CRON_SECRET| EF
+  DB -->|07:01 Europe/Rome pg_net| EF
+  GHA["GitHub Actions Backup & Keep-Alive"] -->|Bearer CRON_SECRET| EF
   EF -->|AES-256-GCM Credentials & Session Cache| DB
   EF -->|HTTPS (10s timeout)| Portal["InfoYou Gym Portal API"]
 ```
