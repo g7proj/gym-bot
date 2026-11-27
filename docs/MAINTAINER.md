@@ -254,12 +254,20 @@ If `ENCRYPTION_KEY` is ever exposed or needs rotation:
 
 ### `503 {"message": "name resolution failed"}` in local Edge Functions
 
-On Windows, Docker Desktop containers may fail to resolve external DNS names (`inforyou.teamsystem.com`).
+This error has two common causes in local Docker development:
 
-Fix:
-1. Open **Docker Desktop → Settings → Docker Engine**.
-2. Add `"dns": ["8.8.8.8", "8.8.4.4"]` to the JSON config and click **Apply & Restart**.
-3. Restart the local stack: `.\scripts\dev-stop.ps1` followed by `.\scripts\dev-start.ps1`.
+1. **Stopped `supabase_edge_runtime_gym-bot` container** (often happens after Windows/Docker Desktop wakes from sleep; Kong then fails internal DNS resolution for the edge runtime hostname):
+   - Check with `docker ps -a --filter "name=supabase_edge_runtime_gym-bot"`.
+   - Fix with:
+     ```powershell
+     docker start supabase_edge_runtime_gym-bot
+     ```
+     (or run `.\scripts\dev-start.ps1 -Restart`).
+
+2. **External DNS resolution inside Docker Desktop on Windows** (Edge Functions cannot resolve `inforyou.teamsystem.com`):
+   - Open **Docker Desktop → Settings → Docker Engine**.
+   - Add `"dns": ["8.8.8.8", "8.8.4.4"]` to the JSON config and click **Apply & Restart**.
+   - Restart the local stack: `.\scripts\dev-stop.ps1` followed by `.\scripts\dev-start.ps1`.
 
 ### `failed to parse environment file: .env` on `supabase start`
 

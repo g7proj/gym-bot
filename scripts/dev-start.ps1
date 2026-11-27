@@ -208,6 +208,12 @@ Write-Host "Wrote frontend env to $envPath" -ForegroundColor Green
 Write-Host "Applying local database schema..." -ForegroundColor Cyan
 supabase db reset
 
+$edgeRunning = docker inspect -f "{{.State.Running}}" supabase_edge_runtime_gym-bot 2>$null
+if ($edgeRunning -ne "true") {
+  Write-Host "Starting supabase_edge_runtime_gym-bot container..." -ForegroundColor Yellow
+  docker start supabase_edge_runtime_gym-bot | Out-Null
+}
+
 Write-Host "Edge Functions are served from the local stack." -ForegroundColor Cyan
 Write-Host "\nLocal dev setup complete." -ForegroundColor Green
 Write-Host "Next steps:" -ForegroundColor Cyan
