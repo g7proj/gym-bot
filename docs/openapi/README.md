@@ -4,8 +4,8 @@ This directory contains OpenAPI 3.0.3 specifications for all HTTP APIs in **gym-
 
 | Specification | Description |
 | --- | --- |
-| [`edge-functions.yaml`](./edge-functions.yaml) | Internal Supabase Edge Functions exposed to the React SPA (`gym-login`, `gym-recover`, `gym-change-password`, `gym-courses`, `gym-calendar`, `gym-mybooks`, `gym-book`, `gym-cancel`). |
-| [`inforyou-api.yaml`](./inforyou-api.yaml) | External InfoYou TeamSystem gym portal endpoints consumed by both `supabase/functions/_shared/gymClient.ts` and `src/gym_bot/client.py`. |
+| [`edge-functions.yaml`](./edge-functions.yaml) | Internal Supabase Edge Functions (`gym-login`, `gym-recover`, `gym-change-password`, `gym-courses`, `gym-calendar`, `gym-mybooks`, `gym-book`, `gym-cancel`, `gym-auto-book`). |
+| [`inforyou-api.yaml`](./inforyou-api.yaml) | External InfoYou TeamSystem gym portal endpoints consumed by `supabase/functions/_shared/gymClient.ts`. |
 
 ## Viewing in Swagger UI (Local Docker)
 

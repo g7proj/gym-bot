@@ -8,59 +8,46 @@ This guide covers environment setup, local testing, production deployment, secur
 
 | Tool | Recommended Version | Purpose |
 | --- | --- | --- |
-| Python | 3.11 or 3.12 | Booking automation script and unit tests |
-| Node.js / npm | Node 20+ | React frontend (`web/`) |
+| Node.js / npm | Node 20+ | React frontend (`web/`) and Jest unit tests |
 | Docker Desktop | Latest | Local Supabase stack (Postgres, GoTrue, Edge Runtime, Studio) |
-| Supabase CLI | 2.x | Local stack management, DB migrations, Edge Functions deploy |
-| Deno (optional) | 2.x | Local type-checking of Edge Functions |
+| Supabase CLI | 2.84.x | Local stack management, DB migrations, Edge Functions deploy |
+| Deno | 2.x | Edge Functions unit tests and type-checking |
 
 ---
 
 ## 2. Environment Setup
 
-### 2.1 Python Virtual Environment
+### 2.1 Environment Files & Secrets
+
+Never commit populated environment files. Templates are provided at `.env.example` and `web/.env.example`:
+
+- `.env.local`: managed automatically by `scripts/dev-start.ps1` (stores local `ENCRYPTION_KEY`, `CRON_SECRET`, and optional `GYM_APP_TOKEN`).
+- `supabase/.env` & `supabase/functions/.env`: generated automatically (UTF-8, no BOM) by `scripts/dev-start.ps1`.
+- `web/.env.development`: generated automatically by `scripts/dev-start.ps1` with local Supabase URL and publishable key.
+
+Generate a 32-byte AES-256-GCM `ENCRYPTION_KEY` in PowerShell if needed for production:
 
 ```powershell
-cd C:\projects\gym-bot
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
+$bytes = New-Object byte[] 32
+[System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
+[Convert]::ToBase64String($bytes)
 ```
 
-If PowerShell blocks script execution:
-
-```powershell
-Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
-```
-
-### 2.2 Environment Files & Secrets
-
-Copy the provided templates as needed (never commit populated env files):
-
-- Root (`.env`, copied from `.env.example`): used only when running `scripts/book_all_users.py` locally.
-- Local secrets cache (`.env.local`): managed automatically by `scripts/dev-start.ps1`.
-- Frontend (`web/.env.development`, copied from `web/.env.example`): written automatically by `scripts/dev-start.ps1` with local Supabase URL and publishable key.
-
-Generate a 32-byte AES-256-GCM `ENCRYPTION_KEY`:
-
-```powershell
-python -c "import base64, os; print(base64.b64encode(os.urandom(32)).decode())"
-```
-
-### 2.3 Local Supabase Stack
+### 2.2 Local Supabase Stack
 
 Start Docker Desktop, then run:
 
 ```powershell
+cd C:\projects\gym-bot
 .\scripts\dev-start.ps1
 ```
 
 This script:
-1. Prompts for (or loads from `.env.local`) `ENCRYPTION_KEY` and optional `GYM_APP_TOKEN`.
+1. Loads or generates `ENCRYPTION_KEY`, `CRON_SECRET`, and optional `GYM_APP_TOKEN` in `.env.local`.
 2. Writes UTF-8 (no BOM) env files to `supabase/.env` and `supabase/functions/.env`.
 3. Starts the local Supabase containers (`supabase start`).
 4. Writes `web/.env.development` with the local API URL and publishable key.
-5. Resets and applies all SQL migrations (`supabase db reset`).
+5. Resets and applies all SQL migrations (`supabase db reset`) and ensures `supabase_edge_runtime_gym-bot` is running.
 
 Local endpoints once started:
 - Supabase API / Edge Functions: `http://127.0.0.1:54321`
@@ -73,7 +60,7 @@ To stop the stack cleanly:
 .\scripts\dev-stop.ps1
 ```
 
-### 2.4 React Frontend
+### 2.3 React Frontend
 
 ```powershell
 cd C:\projects\gym-bot\web
@@ -87,36 +74,46 @@ The SPA runs at `http://localhost:3000`.
 
 ## 3. Local Testing
 
-### 3.1 Python Unit Tests & Dry-Run
+### 3.1 Edge Function Unit Tests (Deno)
 
 ```powershell
 cd C:\projects\gym-bot
-.\.venv\Scripts\python.exe -m unittest discover -s tests -p "test_*.py" -v
+deno test --allow-env supabase/functions/_tests/
 ```
 
-To simulate a full booking run locally without submitting real reservations or touching `public.booking_daily_lock`:
+Covers:
+- AES-256-GCM round-trip encryption/decryption and invalid payload rejection.
+- Encrypted `AuthToken` session cache hit, miss, TTL expiration, auto-refresh on `401`, and non-retry on business errors.
+- Constant-time `CRON_SECRET` verification (`verifyCronSecret`).
+- `Europe/Rome` 20-day booking window, time gate (`>= 07:00`), exact course/time slot matching, `UserPositionWaitingList` checks, lock failure/retry semantics, and `dryRun` isolation.
 
-```powershell
-.\.venv\Scripts\python.exe scripts\book_all_users.py --dry-run
-```
-
-Tests verify:
-- AES-256-GCM round-trip encryption/decryption with zero secret output to `stdout`.
-- Exact course-name and start-time matching (`find_matching_lesson`).
-- Waiting-list detection for both `UserPositionWaitingList` and `WaitingListPosition`.
-- Timezone-aware booking window calculation.
-- Marking the daily booking lock as `failed` (so cron retries) when the portal returns `Successful: false`.
-
-### 3.2 Frontend Production Build Check
+### 3.2 Frontend Unit Tests & Production Build
 
 ```powershell
 cd C:\projects\gym-bot\web
+$env:CI = "true"
+npm test -- --watchAll=false
 npm run build
 ```
 
-### 3.3 Edge Functions Verification
+### 3.3 Local Dry-Run of Automated Booking (`gym-auto-book`)
 
-1. **Forged JWT rejection test** (must return `401 Unauthorized`):
+With the local stack running, read `CRON_SECRET` from `.env.local` and invoke `gym-auto-book` in dry-run mode (with `forceTime: true` if testing before 07:00):
+
+```powershell
+$cronSecret = (Get-Content .env.local | Where-Object { $_ -like "CRON_SECRET=*" }).Split("=", 2)[1]
+Invoke-RestMethod -Uri "http://127.0.0.1:54321/functions/v1/gym-auto-book" `
+  -Method POST `
+  -Headers @{
+    Authorization = "Bearer $cronSecret"
+    "Content-Type" = "application/json"
+  } `
+  -Body '{"dryRun": true, "forceTime": true}' | ConvertTo-Json -Depth 6
+```
+
+### 3.4 Forged JWT Rejection Check
+
+Verify that user-facing Edge Functions reject forged unsigned JWTs with `401 Unauthorized`:
 
 ```powershell
 Invoke-RestMethod -Uri "http://127.0.0.1:54321/functions/v1/gym-courses" `
@@ -126,42 +123,25 @@ Invoke-RestMethod -Uri "http://127.0.0.1:54321/functions/v1/gym-courses" `
   }
 ```
 
-2. **Authenticated Edge Function smoke test**: sign in via `http://localhost:3000`, copy the Bearer token from DevTools Network tab, and invoke `gym-courses`, `gym-calendar`, or `gym-mybooks`.
-
-3. **Portal login diagnostic** (if gym portal login fails unexpectedly):
-
-```powershell
-.\.venv\Scripts\python.exe scripts\check_gym_login.py
-```
-
-4. **Edge Runtime logs** (local Docker):
+### 3.5 Edge Runtime Logs (Local Docker)
 
 ```powershell
 docker logs supabase_edge_runtime_gym-bot --tail 60
 ```
 
-### 3.4 Manual UI Checklist
-
-- Sign in with valid gym credentials succeeds and populates `public.users`.
-- Sign in with wrong credentials displays `Wrong credentials`.
-- Clicking different dates in **Calendar** updates the side panel immediately without re-fetching `gym-calendar` or `gym-mybooks`.
-- Saving and removing lesson slots in **Preferences** persists across page reloads.
-- Booked classes show `Booked`; waitlisted classes show `WL #N` and a `Cancel` action.
-
 ---
 
 ## 4. Production Deployment
 
-Production spans three surfaces: **Supabase (DB + Edge Functions)**, **GitHub Pages (Frontend)**, and **GitHub Actions (Daily Booking Cron)**.
+Production spans three surfaces: **Supabase (DB + Edge Functions)**, **GitHub Pages (Frontend)**, and **GitHub Actions (Scheduled Cron Trigger)**.
 
 ### 4.1 Required Secrets
 
 #### Supabase Project Secrets (Edge Functions)
 
-Set via CLI or Supabase Dashboard → Project Settings → Edge Functions → Secrets:
-
 ```powershell
 supabase secrets set ENCRYPTION_KEY="<32-byte-base64-key>"
+supabase secrets set CRON_SECRET="<random-strong-secret>"
 supabase secrets set APP_TIMEZONE="Europe/Rome"
 supabase secrets set ALLOWED_ORIGINS="https://g7proj.github.io"
 # Optional: override InfoYou AuthToken cache TTL in minutes (default: 15)
@@ -170,7 +150,7 @@ supabase secrets set ALLOWED_ORIGINS="https://g7proj.github.io"
 # supabase secrets set GYM_APP_TOKEN="<portal-app-token>"
 ```
 
-> Supabase automatically injects `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, and `SUPABASE_DB_URL`.
+> Supabase automatically injects `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, and `SUPABASE_DB_URL`. Neither `ENCRYPTION_KEY` nor direct `DATABASE_URL` needs to be stored in GitHub Actions anymore.
 
 #### GitHub Repository Secrets
 
@@ -178,57 +158,35 @@ Configure in GitHub → Settings → Secrets and variables → Actions:
 
 | Secret | Used By | Description |
 | --- | --- | --- |
-| `ENCRYPTION_KEY` | `book.yml` | **Must match** the Supabase `ENCRYPTION_KEY` |
-| `DATABASE_URL` | `book.yml` | Postgres connection string reachable from GitHub runners |
+| `CRON_SECRET` | `book.yml` | **Must match** the Supabase `CRON_SECRET` |
+| `SUPABASE_PROJECT_REF` | `book.yml`, `deploy-supabase.yml` | Supabase project reference ID (Project Settings → General) |
+| `SUPABASE_ACCESS_TOKEN` | `deploy-supabase.yml` | Personal access token from Supabase Account → Access Tokens |
+| `SUPABASE_DB_PASSWORD` | `deploy-supabase.yml` | Database password used by `supabase db push` |
 | `REACT_APP_SUPABASE_URL` | `pages.yml` | Production Supabase project URL |
 | `REACT_APP_SUPABASE_ANON_KEY` | `pages.yml` | Production Supabase publishable/anon key |
-| `SUPABASE_ACCESS_TOKEN` | `deploy-supabase.yml` | Personal access token from Supabase Account → Access Tokens |
-| `SUPABASE_PROJECT_REF` | `deploy-supabase.yml` | Supabase project reference ID (Project Settings → General) |
-| `SUPABASE_DB_PASSWORD` | `deploy-supabase.yml` | Database password used by `supabase db push` |
 
-### 4.2 Deploying Database Migrations
+> Legacy GitHub Secrets `ENCRYPTION_KEY` and `DATABASE_URL` are no longer used by any workflow and can be safely deleted from GitHub Actions Secrets once PR 3 is deployed.
 
-Pushes to `main` touching `supabase/migrations/**` automatically push pending migrations via `.github/workflows/deploy-supabase.yml`.
+### 4.2 Deploying Database Migrations & Edge Functions
 
-To run migrations manually from your machine, link the CLI once to your production project:
+Pushes to `main` touching `supabase/migrations/**`, `supabase/functions/**`, or `supabase/config.toml` automatically run `supabase db push --yes` and redeploy all Edge Functions with `--no-verify-jwt` via `.github/workflows/deploy-supabase.yml`.
+
+Manual CLI fallback if ever needed:
 
 ```powershell
 supabase login
 supabase link --project-ref <your-project-ref>
+supabase db push --yes
+
+Get-ChildItem supabase\functions -Directory |
+  Where-Object { $_.Name -notlike "_*" } |
+  ForEach-Object { supabase functions deploy $_.Name --no-verify-jwt }
 ```
 
-Push pending migrations:
-
-```powershell
-supabase db push
-```
-
-### 4.3 Deploying Supabase Edge Functions
-
-Pushes to `main` touching `supabase/functions/**` automatically redeploy all Edge Functions with `--no-verify-jwt` via `.github/workflows/deploy-supabase.yml`.
-
-To deploy manually whenever any function or shared module (`supabase/functions/_shared/*`) changes (each function performs cryptographic JWT verification via `requireAuth` / `auth.getUser()`):
-
-```powershell
-$functions = @(
-  "gym-login",
-  "gym-recover",
-  "gym-change-password",
-  "gym-courses",
-  "gym-calendar",
-  "gym-mybooks",
-  "gym-book",
-  "gym-cancel"
-)
-foreach ($fn in $functions) {
-  supabase functions deploy $fn --no-verify-jwt
-}
-```
-
-### 4.4 Deploying Frontend & Booking Job
+### 4.3 Deploying Frontend & Running the Booking Cron
 
 - **Frontend (GitHub Pages)**: automatically built and deployed on every push to `main` via `.github/workflows/pages.yml` (Settings → Pages → Source = **GitHub Actions**).
-- **Daily Booking Job**: automatically runs from `main` via `.github/workflows/book.yml` on schedule (`0,30 4-7 * * *`) or manually via **Actions → Daily Gym Booking → Run workflow**.
+- **Daily Booking Job**: `.github/workflows/book.yml` triggers `gym-auto-book` every 30 minutes (`0,30 4-7 * * *` UTC) or manually via **Actions → Daily Gym Booking → Run workflow** (supports `dry_run` and `force_time` checkboxes).
 
 ---
 
@@ -236,19 +194,21 @@ foreach ($fn in $functions) {
 
 ### 5.1 Coding & Security Rules
 
-- **Never log secrets**: never print `ENCRYPTION_KEY`, decrypted passwords, raw `Authorization` headers, or full `/security/webauthenticate` / `/security/changepassword` URLs (which contain passwords as query parameters).
-- **Server-side JWT verification**: always validate tokens through `supabaseAdmin.auth.getUser(token)` in `supabase/functions/_shared/auth.ts`. Never trust unverified base64-decoded JWT claims.
-- **Keep AES-GCM format identical** across Python (`utils/crypto.py`) and Deno (`supabase/functions/_shared/crypto.ts`): `base64(12-byte IV || ciphertext || 16-byte tag)`.
+- **Never log secrets**: never print `ENCRYPTION_KEY`, `CRON_SECRET`, decrypted passwords, raw `Authorization` headers, or full `/security/webauthenticate` / `/security/changepassword` URLs.
+- **Server-side auth verification**: user endpoints validate JWTs via `supabaseAdmin.auth.getUser(token)` (`_shared/auth.ts`); `gym-auto-book` validates `CRON_SECRET` via constant-time digest comparison (`_shared/autoBook.ts`).
 - **Atomic preference updates**: always upsert new preference rows before deleting removed ones.
 
 ### 5.2 Rotating `ENCRYPTION_KEY`
 
-If `ENCRYPTION_KEY` is ever exposed or needs rotation:
-
 1. Generate a new 32-byte base64 key.
-2. Re-encrypt all rows in `public.users.password_encrypted` using a one-off local migration script (decrypt with old key, encrypt with new key) — or ask all users to sign in again after updating the secret (each `gym-login` re-encrypts the password with the active key).
-3. Update `ENCRYPTION_KEY` simultaneously in **Supabase Secrets** and **GitHub Actions Secrets**.
-4. Verify a test login via the web app and trigger a manual `Daily Gym Booking` workflow run.
+2. Update `ENCRYPTION_KEY` in **Supabase Secrets** (`supabase secrets set ENCRYPTION_KEY="..."`).
+3. Have active users sign in once via the web app (each `gym-login` re-encrypts `users.password_encrypted` and refreshes `gym_session_cache` with the active key).
+
+### 5.3 Rotating `CRON_SECRET`
+
+1. Generate a new random secret string.
+2. Update `CRON_SECRET` in both **Supabase Secrets** and **GitHub Repository Secrets**.
+3. Trigger a manual `Daily Gym Booking` dry-run in GitHub Actions to verify `200 OK`.
 
 ---
 
@@ -256,29 +216,13 @@ If `ENCRYPTION_KEY` is ever exposed or needs rotation:
 
 ### `503 {"message": "name resolution failed"}` in local Edge Functions
 
-This error has two common causes in local Docker development:
-
-1. **Stopped `supabase_edge_runtime_gym-bot` container** (often happens after Windows/Docker Desktop wakes from sleep; Kong then fails internal DNS resolution for the edge runtime hostname):
-   - Check with `docker ps -a --filter "name=supabase_edge_runtime_gym-bot"`.
-   - Fix with:
-     ```powershell
-     docker start supabase_edge_runtime_gym-bot
-     ```
-     (or run `.\scripts\dev-start.ps1 -Restart`).
-
-2. **External DNS resolution inside Docker Desktop on Windows** (Edge Functions cannot resolve `inforyou.teamsystem.com`):
-   - Open **Docker Desktop → Settings → Docker Engine**.
-   - Add `"dns": ["8.8.8.8", "8.8.4.4"]` to the JSON config and click **Apply & Restart**.
-   - Restart the local stack: `.\scripts\dev-stop.ps1` followed by `.\scripts\dev-start.ps1`.
+1. **Stopped `supabase_edge_runtime_gym-bot` container** (after Windows/Docker sleep, Kong fails internal DNS resolution for the edge runtime container):
+   ```powershell
+   docker start supabase_edge_runtime_gym-bot
+   ```
+2. **External DNS resolution inside Docker Desktop on Windows**:
+   - Open **Docker Desktop → Settings → Docker Engine**, add `"dns": ["8.8.8.8", "8.8.4.4"]`, click **Apply & Restart**, then re-run `.\scripts\dev-stop.ps1` and `.\scripts\dev-start.ps1`.
 
 ### `failed to parse environment file: .env` on `supabase start`
 
-Delete `supabase/.env` and `supabase/functions/.env`, then re-run `.\scripts\dev-start.ps1` (the script writes UTF-8 without BOM).
-
-### `web/.env.development` shows as modified in `git status`
-
-If the file was previously tracked before being added to `.gitignore`, untrack it once without deleting your local copy:
-
-```powershell
-git rm --cached web/.env.development
-```
+Delete `supabase/.env` and `supabase/functions/.env`, then re-run `.\scripts\dev-start.ps1`.

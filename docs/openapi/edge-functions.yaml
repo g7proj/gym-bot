@@ -26,6 +26,8 @@ tags:
     description: Weekly course discovery and calendar availability
   - name: Bookings
     description: User bookings, class reservation, waitlist, and cancellation
+  - name: Automation
+    description: Scheduled machine-to-machine class booking runner
 
 components:
   securitySchemes:
@@ -34,6 +36,10 @@ components:
       scheme: bearer
       bearerFormat: JWT
       description: Supabase Auth access token obtained from `supabase.auth.signInWithPassword` or `signUp`.
+    CronBearerAuth:
+      type: http
+      scheme: bearer
+      description: Shared `CRON_SECRET` token verified in constant time by `gym-auto-book`.
 
   schemas:
     ErrorResponse:
@@ -337,6 +343,95 @@ components:
         response:
           type: object
           description: Raw response payload from the InfoYou API
+
+    AutoBookRequest:
+      type: object
+      properties:
+        dryRun:
+          type: boolean
+          default: false
+          description: Simulate bookings without calling `/webbooking/book` or updating `booking_daily_lock`.
+        forceTime:
+          type: boolean
+          default: false
+          description: Bypass the `>= 07:00 Europe/Rome` morning time gate (useful for manual dry-runs).
+
+    AutoBookResponse:
+      type: object
+      required:
+        - success
+        - timeZone
+        - runDate
+        - targetDate
+        - targetWeekday
+        - dryRun
+        - skippedByTimeGate
+        - processedUsers
+        - bookedCount
+        - wouldBookCount
+        - failedUsers
+        - results
+      properties:
+        success:
+          type: boolean
+          example: true
+        timeZone:
+          type: string
+          example: Europe/Rome
+        runDate:
+          type: string
+          format: date
+        targetDate:
+          type: string
+          format: date
+        targetWeekday:
+          type: string
+          example: wednesday
+        dryRun:
+          type: boolean
+        skippedByTimeGate:
+          type: boolean
+        processedUsers:
+          type: integer
+        bookedCount:
+          type: integer
+        wouldBookCount:
+          type: integer
+        failedUsers:
+          type: integer
+        results:
+          type: array
+          items:
+            type: object
+            required: [userId, outcome, slots]
+            properties:
+              userId:
+                type: string
+                format: uuid
+              outcome:
+                type: string
+                enum: [completed, dry_run, lock_skipped, no_preferences, no_lessons, failed]
+              lockStatus:
+                type: string
+              error:
+                type: string
+              slots:
+                type: array
+                items:
+                  type: object
+                  required: [course, lessonStartTime, outcome]
+                  properties:
+                    course:
+                      type: string
+                    lessonStartTime:
+                      type: string
+                    lessonId:
+                      type: integer
+                    outcome:
+                      type: string
+                      enum: [booked, would_book, already_booked, no_seats, no_match, invalid_slot, failed]
+                    detail:
+                      type: string
 
 paths:
   /gym-login:
@@ -665,6 +760,43 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
         '500':
           description: Upstream gym API rejected the cancellation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /gym-auto-book:
+    post:
+      tags: [Automation]
+      summary: Run automated daily bookings for all users
+      description: >
+        Machine-to-machine endpoint invoked by `.github/workflows/book.yml`.
+        Validates `Authorization: Bearer <CRON_SECRET>`, enforces the `>= 07:00 Europe/Rome`
+        time gate, acquires per-user daily locks (`acquire_booking_lock`), and books exact
+        preferred lesson slots on `today + 19`.
+      security:
+        - CronBearerAuth: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AutoBookRequest'
+      responses:
+        '200':
+          description: Automated booking run summary
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AutoBookResponse'
+        '401':
+          description: Missing or invalid `CRON_SECRET`
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Missing server configuration or database error
           content:
             application/json:
               schema:

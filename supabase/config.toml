@@ -396,3 +396,6 @@ verify_jwt = false
 [functions.gym-recover]
 verify_jwt = false
 
+[functions.gym-auto-book]
+verify_jwt = false
+

@@ -1,4 +1,0 @@
-"""
-Gym bot package initialization.
-"""
-

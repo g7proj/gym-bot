@@ -4,7 +4,7 @@ info:
   version: 1.0.0
   description: >
     Reverse-engineered subset of the external InfoYou TeamSystem web booking API consumed by
-    both `supabase/functions/_shared/gymClient.ts` (Deno) and `src/gym_bot/client.py` (Python).
+    `supabase/functions/_shared/gymClient.ts` (Deno).
 
     Every request requires the portal `AppToken` and legacy `IYESUrl` in both HTTP headers
     and the `Cookie` header. Authenticated requests additionally require `AuthToken`.
