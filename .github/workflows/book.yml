@@ -1,11 +1,12 @@
-name: Daily Gym Booking
+name: Daily Gym Booking (Backup & Keep-Alive)
 
 on:
   schedule:
-    # Every 30 minutes during the morning window (UTC).
-    # 04:00-07:30 UTC = 06:00-09:30 CEST / 05:00-08:30 CET.
-    # The gym-auto-book Edge Function enforces >= 07:00 Europe/Rome internally.
-    - cron: "0,30 4-7 * * *"
+    # Primary booking fires at 07:01:00 Europe/Rome via Supabase pg_cron + pg_net.
+    # This single daily run (07:17 UTC = 08:17 CET / 09:17 CEST) acts as:
+    # 1. External API traffic to prevent Supabase Free Tier 7-day inactivity pause
+    # 2. Backup retry if the 07:01 run encountered a transient gym portal outage
+    - cron: "17 7 * * *"
   workflow_dispatch:
     inputs:
       dry_run:
