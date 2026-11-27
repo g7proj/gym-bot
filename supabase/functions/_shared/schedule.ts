@@ -77,3 +77,95 @@ export function weekdayName(date: Date): string | null {
   const mondayIndex = (jsDay + 6) % 7;
   return WEEKDAY_EN[mondayIndex] || null;
 }
+
+export interface ZonedDateParts {
+  year: number;
+  month: number;
+  day: number;
+  hour: number;
+  minute: number;
+  second: number;
+  isoDate: string;
+}
+
+/**
+ * Extract calendar date and 24-hour clock components in the target IANA time zone
+ * using Intl.DateTimeFormat (immune to host OS timezone).
+ */
+export function getZonedParts(
+  timeZone = DEFAULT_TIMEZONE,
+  instant: Date = new Date(),
+): ZonedDateParts {
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+  });
+  const map: Record<string, string> = {};
+  for (const part of formatter.formatToParts(instant)) {
+    if (part.type !== 'literal') {
+      map[part.type] = part.value;
+    }
+  }
+  const year = Number(map.year);
+  const month = Number(map.month);
+  const day = Number(map.day);
+  // Some ICU builds emit "24" for midnight under h23; normalize to 0.
+  const rawHour = Number(map.hour);
+  const hour = rawHour === 24 ? 0 : rawHour;
+  const minute = Number(map.minute);
+  const second = Number(map.second);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return {
+    year,
+    month,
+    day,
+    hour,
+    minute,
+    second,
+    isoDate: `${year}-${pad(month)}-${pad(day)}`,
+  };
+}
+
+/** Add `days` to a `YYYY-MM-DD` calendar date without DST drift. */
+export function addDaysIso(isoDate: string, days: number): string {
+  const [y, m, d] = isoDate.split('-').map(Number);
+  const utc = new Date(Date.UTC(y, m - 1, d + days));
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${utc.getUTCFullYear()}-${pad(utc.getUTCMonth() + 1)}-${pad(utc.getUTCDate())}`;
+}
+
+/** Resolve the lowercase English weekday (`monday`..`sunday`) for a `YYYY-MM-DD` date. */
+export function weekdayFromIsoDate(isoDate: string): string {
+  const [y, m, d] = isoDate.split('-').map(Number);
+  const utcDay = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+  const mondayIndex = (utcDay + 6) % 7;
+  return WEEKDAY_EN[mondayIndex];
+}
+
+/**
+ * Build the 20-day InfoYou booking window (`today` .. `today + 19`) for automated runs.
+ */
+export function getBookingWindowStrings(todayIso: string): {
+  startDate: string;
+  endDate: string;
+  timeStart: string;
+  timeEnd: string;
+  targetDate: string;
+  targetWeekday: string;
+} {
+  const targetDate = addDaysIso(todayIso, 19);
+  return {
+    startDate: `${todayIso}T00:00:00`,
+    endDate: `${targetDate}T00:00:00`,
+    timeStart: `${todayIso}T07:00:00`,
+    timeEnd: `${todayIso}T23:59:59`,
+    targetDate,
+    targetWeekday: weekdayFromIsoDate(targetDate),
+  };
+}

@@ -68,6 +68,15 @@ if (-not $encryptionKey) {
 }
 Set-SecretValue -Key 'ENCRYPTION_KEY' -Value $encryptionKey
 
+$cronSecret = $secrets['CRON_SECRET']
+if (-not $cronSecret) {
+  $cronBytes = New-Object byte[] 24
+  [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($cronBytes)
+  $cronSecret = [Convert]::ToBase64String($cronBytes)
+  Write-Host "Generated local CRON_SECRET for gym-auto-book" -ForegroundColor Yellow
+}
+Set-SecretValue -Key 'CRON_SECRET' -Value $cronSecret
+
 $gymToken = $secrets['GYM_APP_TOKEN']
 if (-not $gymToken) {
   $gymToken = Read-Host "Enter GYM_APP_TOKEN (optional, press Enter to skip)"
@@ -86,6 +95,7 @@ Write-Host "Saved local secrets to $secretsPath" -ForegroundColor Green
 $localEnvPath = "C:\projects\gym-bot\supabase\.env"
 $localEnvLines = @(
   "ENCRYPTION_KEY=$encryptionKey",
+  "CRON_SECRET=$cronSecret",
   "APP_TIMEZONE=$TimeZone"
 )
 if ($gymToken) {
