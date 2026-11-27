@@ -3,6 +3,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { encryptString } from '../_shared/crypto.ts';
 import { requireAuth } from '../_shared/auth.ts';
 import { changePassword, gymLogin } from '../_shared/gymClient.ts';
+import { invalidateGymToken } from '../_shared/gymSession.ts';
 import { getCorsHeaders, handleOptions } from '../_shared/http.ts';
 
 // Change the gym password and keep Supabase credentials in sync.
@@ -82,6 +83,8 @@ serve(async (req) => {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
+
+    await invalidateGymToken(supabaseAdmin, user.id);
 
     return new Response(JSON.stringify({ success: true }), {
       status: 200,

@@ -2,6 +2,7 @@ import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { encryptString } from '../_shared/crypto.ts';
 import { gymLogin } from '../_shared/gymClient.ts';
+import { cacheGymToken } from '../_shared/gymSession.ts';
 import { getCorsHeaders, handleOptions } from '../_shared/http.ts';
 
 function usernameToEmail(username: string): string {
@@ -34,7 +35,7 @@ serve(async (req) => {
     }
 
     // Only reset the auth password if the gym login succeeds.
-    await gymLogin(username, password);
+    const gymToken = await gymLogin(username, password);
 
     const email = usernameToEmail(username);
 
@@ -123,6 +124,8 @@ serve(async (req) => {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
+
+    await cacheGymToken(supabaseAdmin, authUserId, gymToken);
 
     return new Response(JSON.stringify({ success: true }), {
       status: 200,
