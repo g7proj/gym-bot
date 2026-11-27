@@ -1,4 +1,5 @@
 import { supabase } from './supabaseClient';
+import { extractFunctionError } from '../utils/functionError';
 
 // Fetch the current auth session (if any).
 export async function getSession() {
@@ -23,11 +24,15 @@ function isUserAlreadyExists(error) {
 
 // Attempt to recover an existing Supabase Auth user using gym credentials.
 async function recoverAuthPassword(username, password) {
-  const { error } = await supabase.functions.invoke('gym-recover', {
+  const { data, error } = await supabase.functions.invoke('gym-recover', {
     body: { username, password },
   });
   if (error) {
-    throw error;
+    const message = await extractFunctionError(error, 'Account recovery failed');
+    throw new Error(message);
+  }
+  if (data?.error) {
+    throw new Error(String(data.error));
   }
 }
 

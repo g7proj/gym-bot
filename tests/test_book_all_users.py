@@ -8,12 +8,16 @@ from datetime import date
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import requests
+
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "src"))
 
 from api.models import PreferenceSlot, User, UserCredentials, UserPreferences
 from gym_bot import schedule
+from gym_bot.client import GymClient, GymClientError
+from gym_bot.config import Credentials
 from scripts import book_all_users
 from utils.crypto import CryptoUtils
 
@@ -32,6 +36,24 @@ class CryptoUtilsTests(unittest.TestCase):
         output = buf.getvalue()
         self.assertNotIn(key, output)
         self.assertNotIn(secret_password, output)
+
+
+class ClientSecurityTests(unittest.TestCase):
+    def test_login_network_error_does_not_leak_password(self):
+        client = GymClient()
+        secret_password = "SuperSecretPassword!123"
+        raw_error = requests.ConnectionError(
+            "HTTPSConnectionPool: Max retries exceeded with url: "
+            f"/dream/api/v1/security/webauthenticate?login=mario&password={secret_password}"
+        )
+
+        with patch.object(client.session, "get", side_effect=raw_error):
+            with self.assertRaises(GymClientError) as ctx:
+                client.login(Credentials(username="mario", password=secret_password))
+
+        message = str(ctx.exception)
+        self.assertNotIn(secret_password, message)
+        self.assertIn("ConnectionError", message)
 
 
 class BookingLogicTests(unittest.TestCase):
