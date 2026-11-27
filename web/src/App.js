@@ -18,6 +18,7 @@ import {
 } from './services/gymFunctions';
 import { getSession, signInOrSignUp } from './services/auth';
 import { getTodayIsoLocal } from './utils/date';
+import { extractFunctionError } from './utils/functionError';
 
 function App() {
   const [sessionUserId, setSessionUserId] = useState(null);
@@ -30,6 +31,7 @@ function App() {
   const [calendarMeta, setCalendarMeta] = useState({ startDate: null, endDate: null });
   const [selectedDate, setSelectedDate] = useState(getTodayIsoLocal());
   const [myBookings, setMyBookings] = useState([]);
+  const [bookingRuns, setBookingRuns] = useState([]);
   const [notice, setNotice] = useState(null);
   const [activeTab, setActiveTab] = useState('calendar');
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -49,6 +51,28 @@ function App() {
     }
   }, []);
 
+  const loadBookingRuns = useCallback(async (id) => {
+    if (!id) {
+      setBookingRuns([]);
+      return;
+    }
+    try {
+      const { data, error: lockError } = await supabase
+        .from('booking_daily_lock')
+        .select('run_date, status, locked_at, error')
+        .eq('user_id', id)
+        .order('run_date', { ascending: false })
+        .limit(5);
+      if (lockError) {
+        setBookingRuns([]);
+        return;
+      }
+      setBookingRuns(Array.isArray(data) ? data : []);
+    } catch (_err) {
+      setBookingRuns([]);
+    }
+  }, []);
+
   const loadUser = useCallback(async (id) => {
     return runWithPending(async () => {
       try {
@@ -62,6 +86,7 @@ function App() {
         }
         if (!userRow) {
           setUser(null);
+          setBookingRuns([]);
           return;
         }
         const { data: prefRows, error: prefError } = await supabase
@@ -85,11 +110,12 @@ function App() {
           credentials: { username: userRow?.username || '' },
           preferences: { by_day: byDay },
         });
+        await loadBookingRuns(id);
       } catch (_err) {
         setError('Failed to load user data');
       }
     });
-  }, [runWithPending]);
+  }, [runWithPending, loadBookingRuns]);
 
   const loadCourses = useCallback(async () => {
     return runWithPending(async () => {
@@ -118,12 +144,11 @@ function App() {
           headers: { Authorization: `Bearer ${session.access_token}` },
         });
         if (invokeError) {
-          // Expose the full error from the Edge Function for easier debugging
-          const detail = invokeError?.message || JSON.stringify(invokeError);
-          throw new Error(`gym-login: ${detail}`);
+          const detail = await extractFunctionError(invokeError, 'Login failed');
+          throw new Error(detail);
         }
         if (data?.error) {
-          throw new Error(`gym-login: ${data.error}`);
+          throw new Error(String(data.error));
         }
 
         // Step 3: load user profile from public.users
@@ -137,10 +162,15 @@ function App() {
       });
     } catch (err) {
       const message = String(err?.message || '');
-      if (message.includes('Login not successful') || message.toLowerCase().includes('bad login')) {
+      const normalized = message.toLowerCase();
+      if (
+        normalized.includes('login not successful')
+        || normalized.includes('bad login')
+        || normalized.includes('invalid login credentials')
+      ) {
         setError('Wrong credentials');
       } else {
-        setError(err?.message || 'Login failed');
+        setError(message || 'Login failed');
       }
     } finally {
       setLoading(false);
@@ -365,6 +395,7 @@ function App() {
     setCalendarDays([]);
     setCalendarMeta({ startDate: null, endDate: null });
     setMyBookings([]);
+    setBookingRuns([]);
     selectedByUserRef.current = false;
     setSelectedDate(getTodayIsoLocal());
   };
@@ -404,6 +435,7 @@ function App() {
           setCoursesByDay({});
           setCalendarDays([]);
           setCalendarMeta({ startDate: null, endDate: null });
+          setBookingRuns([]);
           selectedByUserRef.current = false;
           setSelectedDate(getTodayIsoLocal());
         }
@@ -427,8 +459,10 @@ function App() {
     if (activeTab === 'calendar') {
       loadCalendar().catch(() => {});
       loadMyBookings().catch(() => {});
+    } else if (activeTab === 'preferences') {
+      loadBookingRuns(user.id).catch(() => {});
     }
-  }, [activeTab, user?.id, loadCalendar, loadMyBookings]);
+  }, [activeTab, user?.id, loadCalendar, loadMyBookings, loadBookingRuns]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-opal-mist via-opal-pearl to-opal-sky text-slate-900">
@@ -471,6 +505,8 @@ function App() {
             <Dashboard
               user={user}
               coursesByDay={coursesByDay}
+              bookingRuns={bookingRuns}
+              onRefreshStatus={() => loadBookingRuns(user.id)}
               onUpdatePreferences={updatePreferences}
               loading={loading}
             />

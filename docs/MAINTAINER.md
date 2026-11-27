@@ -180,10 +180,15 @@ Configure in GitHub → Settings → Secrets and variables → Actions:
 | `DATABASE_URL` | `book.yml` | Postgres connection string reachable from GitHub runners |
 | `REACT_APP_SUPABASE_URL` | `pages.yml` | Production Supabase project URL |
 | `REACT_APP_SUPABASE_ANON_KEY` | `pages.yml` | Production Supabase publishable/anon key |
+| `SUPABASE_ACCESS_TOKEN` | `deploy-supabase.yml` | Personal access token from Supabase Account → Access Tokens |
+| `SUPABASE_PROJECT_REF` | `deploy-supabase.yml` | Supabase project reference ID (Project Settings → General) |
+| `SUPABASE_DB_PASSWORD` | `deploy-supabase.yml` | Database password used by `supabase db push` |
 
 ### 4.2 Deploying Database Migrations
 
-Link the CLI once to your production project:
+Pushes to `main` touching `supabase/migrations/**` automatically push pending migrations via `.github/workflows/deploy-supabase.yml`.
+
+To run migrations manually from your machine, link the CLI once to your production project:
 
 ```powershell
 supabase login
@@ -198,7 +203,9 @@ supabase db push
 
 ### 4.3 Deploying Supabase Edge Functions
 
-Whenever any function or shared module (`supabase/functions/_shared/*`) changes, redeploy all affected functions with `--no-verify-jwt` (each function performs cryptographic JWT verification via `requireAuth` / `auth.getUser()`):
+Pushes to `main` touching `supabase/functions/**` automatically redeploy all Edge Functions with `--no-verify-jwt` via `.github/workflows/deploy-supabase.yml`.
+
+To deploy manually whenever any function or shared module (`supabase/functions/_shared/*`) changes (each function performs cryptographic JWT verification via `requireAuth` / `auth.getUser()`):
 
 ```powershell
 $functions = @(
@@ -247,12 +254,20 @@ If `ENCRYPTION_KEY` is ever exposed or needs rotation:
 
 ### `503 {"message": "name resolution failed"}` in local Edge Functions
 
-On Windows, Docker Desktop containers may fail to resolve external DNS names (`inforyou.teamsystem.com`).
+This error has two common causes in local Docker development:
 
-Fix:
-1. Open **Docker Desktop → Settings → Docker Engine**.
-2. Add `"dns": ["8.8.8.8", "8.8.4.4"]` to the JSON config and click **Apply & Restart**.
-3. Restart the local stack: `.\scripts\dev-stop.ps1` followed by `.\scripts\dev-start.ps1`.
+1. **Stopped `supabase_edge_runtime_gym-bot` container** (often happens after Windows/Docker Desktop wakes from sleep; Kong then fails internal DNS resolution for the edge runtime hostname):
+   - Check with `docker ps -a --filter "name=supabase_edge_runtime_gym-bot"`.
+   - Fix with:
+     ```powershell
+     docker start supabase_edge_runtime_gym-bot
+     ```
+     (or run `.\scripts\dev-start.ps1 -Restart`).
+
+2. **External DNS resolution inside Docker Desktop on Windows** (Edge Functions cannot resolve `inforyou.teamsystem.com`):
+   - Open **Docker Desktop → Settings → Docker Engine**.
+   - Add `"dns": ["8.8.8.8", "8.8.4.4"]` to the JSON config and click **Apply & Restart**.
+   - Restart the local stack: `.\scripts\dev-stop.ps1` followed by `.\scripts\dev-start.ps1`.
 
 ### `failed to parse environment file: .env` on `supabase start`
 

@@ -1,5 +1,8 @@
 import { supabase } from './supabaseClient';
 import { getSession } from './auth';
+import { extractFunctionError } from '../utils/functionError';
+
+export { extractFunctionError };
 
 async function invokeWithSession(functionName, body) {
   const session = await getSession();
@@ -10,7 +13,13 @@ async function invokeWithSession(functionName, body) {
     headers: { Authorization: `Bearer ${session.access_token}` },
   });
 
-  if (error) throw error;
+  if (error) {
+    const message = await extractFunctionError(error, `Request to ${functionName} failed`);
+    throw new Error(message);
+  }
+  if (data?.error) {
+    throw new Error(String(data.error));
+  }
   return data;
 }
 

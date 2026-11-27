@@ -55,6 +55,11 @@ create policy "Users can manage own preferences"
     using (auth.uid() = user_id)
     with check (auth.uid() = user_id);
 
+create policy "Users can view own booking runs"
+    on public.booking_daily_lock
+    for select
+    using (auth.uid() = user_id);
+
 -- Atomic lock acquisition for booking runs.
 create or replace function public.acquire_booking_lock(
   p_user_id uuid,

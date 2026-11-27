@@ -57,7 +57,10 @@ class GymClient:
         try:
             response = self.session.get(login_url, params=params, timeout=10)
         except requests.RequestException as exc:
-            raise GymClientError(f"Login request failed: {exc}") from exc
+            # Never propagate raw RequestException details because the query string contains the password.
+            raise GymClientError(
+                f"Login request failed due to network error ({type(exc).__name__})"
+            ) from None
 
         if not response.ok:
             raise GymClientError(
