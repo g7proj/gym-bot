@@ -3,6 +3,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { encryptString } from '../_shared/crypto.ts';
 import { requireAuth } from '../_shared/auth.ts';
 import { gymLogin } from '../_shared/gymClient.ts';
+import { cacheGymToken } from '../_shared/gymSession.ts';
 import { getCorsHeaders, handleOptions } from '../_shared/http.ts';
 
 // Validate gym credentials and store them encrypted for the logged-in user.
@@ -34,10 +35,12 @@ serve(async (req) => {
     }
 
     // Only persist credentials after a successful gym login.
-    await gymLogin(username, password);
+    const gymToken = await gymLogin(username, password);
     const encrypted = await encryptString(password);
 
-    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceRoleKey);
+    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceRoleKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
 
     // Enforce unique username by removing any older account record.
     const { data: existingUser } = await supabaseAdmin
@@ -67,6 +70,9 @@ serve(async (req) => {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
+
+    // Warm the session cache so immediate calendar/courses/mybooks requests skip re-login.
+    await cacheGymToken(supabaseAdmin, user.id, gymToken);
 
     return new Response(JSON.stringify({ user_id: user.id, username }), {
       status: 200,

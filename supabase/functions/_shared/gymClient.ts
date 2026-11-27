@@ -1,5 +1,6 @@
 const BASE_URL = 'https://inforyou.teamsystem.com/dream/api/v1';
 const COMPANY_ID = 2;
+const REQUEST_TIMEOUT_MS = 10_000;
 const DEFAULT_APP_TOKEN = (
   'BEF7B53DFC2052488E6ECE5A5F2AA0CBC2C27110B9E292EDBE10A138EBF9C25A'
   + '249FE8E018656CF3596032CB821C179FA266FC29895E3371642920A4F97DBE2B'
@@ -31,6 +32,26 @@ function buildCookie(appToken: string, authToken?: string): string {
   return parts.join('; ');
 }
 
+/**
+ * Execute an HTTP request with a strict timeout and sanitized error message so
+ * query-string secrets (e.g. on webauthenticate / changepassword) never leak.
+ */
+async function fetchWithTimeout(
+  url: string,
+  init: RequestInit,
+  operationLabel: string,
+): Promise<Response> {
+  try {
+    return await fetch(url, {
+      ...init,
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    });
+  } catch (err) {
+    const errorType = err instanceof Error ? err.name : 'NetworkError';
+    throw new Error(`${operationLabel} request failed (${errorType})`);
+  }
+}
+
 // Authenticate and return the session token used by all booking endpoints.
 export async function gymLogin(username: string, password: string): Promise<string> {
   const appToken = getAppToken();
@@ -43,14 +64,18 @@ export async function gymLogin(username: string, password: string): Promise<stri
     'https://inforyou.teamsystem.com/dream/account-verification/',
   );
 
-  const response = await fetch(loginUrl.toString(), {
-    method: 'GET',
-    headers: {
-      AppToken: appToken,
-      IYESUrl: IYES_URL,
-      Cookie: buildCookie(appToken),
+  const response = await fetchWithTimeout(
+    loginUrl.toString(),
+    {
+      method: 'GET',
+      headers: {
+        AppToken: appToken,
+        IYESUrl: IYES_URL,
+        Cookie: buildCookie(appToken),
+      },
     },
-  });
+    'Login',
+  );
 
   if (!response.ok) {
     const text = await response.text();
@@ -77,31 +102,40 @@ export async function listWithMine(
   timeEnd: string,
 ): Promise<any> {
   const appToken = getAppToken();
-  const response = await fetch(`${BASE_URL}/webbooking/listwithmine`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      AppToken: appToken,
-      IYESUrl: IYES_URL,
-      AuthToken: token,
-      Cookie: buildCookie(appToken, token),
+  const response = await fetchWithTimeout(
+    `${BASE_URL}/webbooking/listwithmine`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        AppToken: appToken,
+        IYESUrl: IYES_URL,
+        AuthToken: token,
+        Cookie: buildCookie(appToken, token),
+      },
+      body: JSON.stringify({
+        CompanyID: COMPANY_ID,
+        Types: [],
+        StartDate: startDate,
+        EndDate: endDate,
+        TimeStart: timeStart,
+        TimeEnd: timeEnd,
+      }),
     },
-    body: JSON.stringify({
-      CompanyID: COMPANY_ID,
-      Types: [],
-      StartDate: startDate,
-      EndDate: endDate,
-      TimeStart: timeStart,
-      TimeEnd: timeEnd,
-    }),
-  });
+    'listwithmine',
+  );
 
   if (!response.ok) {
     const text = await response.text();
     throw new Error(`listwithmine failed with HTTP ${response.status}: ${text}`);
   }
 
-  return response.json();
+  const data = await response.json();
+  if (data?.Successful === false) {
+    const message = data?.ErrorMessage || data?.Comment || 'Unknown error';
+    throw new Error(`listwithmine not successful: ${message}`);
+  }
+  return data;
 }
 
 // Fetch all current bookings for the authenticated user.
@@ -111,22 +145,31 @@ export async function myBookings(token: string): Promise<any> {
   url.searchParams.set('companyID', String(COMPANY_ID));
   url.searchParams.set('Type', '');
 
-  const response = await fetch(url.toString(), {
-    method: 'GET',
-    headers: {
-      AppToken: appToken,
-      IYESUrl: IYES_URL,
-      AuthToken: token,
-      Cookie: buildCookie(appToken, token),
+  const response = await fetchWithTimeout(
+    url.toString(),
+    {
+      method: 'GET',
+      headers: {
+        AppToken: appToken,
+        IYESUrl: IYES_URL,
+        AuthToken: token,
+        Cookie: buildCookie(appToken, token),
+      },
     },
-  });
+    'mybooks',
+  );
 
   if (!response.ok) {
     const text = await response.text();
     throw new Error(`mybooks failed with HTTP ${response.status}: ${text}`);
   }
 
-  return response.json();
+  const data = await response.json();
+  if (data?.Successful === false) {
+    const message = data?.ErrorMessage || data?.Comment || 'Unknown error';
+    throw new Error(`mybooks not successful: ${message}`);
+  }
+  return data;
 }
 
 // Shared helper for booking, waitlist, and cancel endpoints.
@@ -136,17 +179,21 @@ async function postBooking(
   payload: Record<string, unknown>,
 ): Promise<any> {
   const appToken = getAppToken();
-  const response = await fetch(`${BASE_URL}/webbooking/${endpoint}`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      AppToken: appToken,
-      IYESUrl: IYES_URL,
-      AuthToken: token,
-      Cookie: buildCookie(appToken, token),
+  const response = await fetchWithTimeout(
+    `${BASE_URL}/webbooking/${endpoint}`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        AppToken: appToken,
+        IYESUrl: IYES_URL,
+        AuthToken: token,
+        Cookie: buildCookie(appToken, token),
+      },
+      body: JSON.stringify(payload),
     },
-    body: JSON.stringify(payload),
-  });
+    endpoint,
+  );
 
   if (!response.ok) {
     const text = await response.text();
@@ -192,15 +239,19 @@ export async function changePassword(
   url.searchParams.set('oldpwd', oldPassword);
   url.searchParams.set('newpwd', newPassword);
 
-  const response = await fetch(url.toString(), {
-    method: 'GET',
-    headers: {
-      AppToken: appToken,
-      IYESUrl: IYES_URL,
-      AuthToken: token,
-      Cookie: buildCookie(appToken, token),
+  const response = await fetchWithTimeout(
+    url.toString(),
+    {
+      method: 'GET',
+      headers: {
+        AppToken: appToken,
+        IYESUrl: IYES_URL,
+        AuthToken: token,
+        Cookie: buildCookie(appToken, token),
+      },
     },
-  });
+    'changepassword',
+  );
 
   if (!response.ok) {
     const text = await response.text();

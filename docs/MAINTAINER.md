@@ -164,6 +164,8 @@ Set via CLI or Supabase Dashboard → Project Settings → Edge Functions → Se
 supabase secrets set ENCRYPTION_KEY="<32-byte-base64-key>"
 supabase secrets set APP_TIMEZONE="Europe/Rome"
 supabase secrets set ALLOWED_ORIGINS="https://g7proj.github.io"
+# Optional: override InfoYou AuthToken cache TTL in minutes (default: 15)
+# supabase secrets set GYM_TOKEN_TTL_MINUTES="15"
 # Optional if the portal rotates its AppToken:
 # supabase secrets set GYM_APP_TOKEN="<portal-app-token>"
 ```

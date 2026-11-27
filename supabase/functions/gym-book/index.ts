@@ -1,8 +1,8 @@
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { decryptString } from '../_shared/crypto.ts';
 import { requireAuth } from '../_shared/auth.ts';
-import { addWait, bookLesson, gymLogin } from '../_shared/gymClient.ts';
+import { addWait, bookLesson } from '../_shared/gymClient.ts';
+import { UserCredentialsNotFoundError, withGymSession } from '../_shared/gymSession.ts';
 import { getCorsHeaders, handleOptions } from '../_shared/http.ts';
 
 // Book a class or place the user on the waitlist depending on seat availability.
@@ -14,33 +14,13 @@ serve(async (req) => {
 
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
-    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY') || '';
     const supabaseServiceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
-    const authHeader = req.headers.get('authorization') || '';
-
-    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-      global: { headers: { Authorization: authHeader } },
-    });
 
     const authResult = await requireAuth(req, supabaseUrl, supabaseServiceRoleKey, corsHeaders);
     if (authResult.errorResponse) {
       return authResult.errorResponse;
     }
     const user = authResult.user;
-
-    // Load encrypted gym credentials from the users table.
-    const { data: userRow, error: userRowError } = await supabase
-      .from('users')
-      .select('username, password_encrypted')
-      .eq('id', user.id)
-      .single();
-
-    if (userRowError || !userRow?.password_encrypted) {
-      return new Response(JSON.stringify({ error: 'User credentials not found' }), {
-        status: 404,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
 
     const body = await req.json();
     const idService = Number(body?.idService);
@@ -80,9 +60,6 @@ serve(async (req) => {
       });
     }
 
-    const password = await decryptString(userRow.password_encrypted);
-    const gymToken = await gymLogin(userRow.username, password);
-
     const payload = {
       Note: '',
       BookNr: bookNr,
@@ -94,16 +71,29 @@ serve(async (req) => {
       IDDurata: idDurata,
     };
 
+    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceRoleKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
+
     // If no slots are available, fall back to waitlist.
-    const response = availablePlaces > 0
-      ? await bookLesson(gymToken, payload)
-      : await addWait(gymToken, payload);
+    const response = await withGymSession(
+      supabaseAdmin,
+      user.id,
+      (gymToken) => (availablePlaces > 0 ? bookLesson(gymToken, payload) : addWait(gymToken, payload)),
+      { idempotent: false },
+    );
 
     return new Response(JSON.stringify({ success: true, response }), {
       status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (err) {
+    if (err instanceof UserCredentialsNotFoundError) {
+      return new Response(JSON.stringify({ error: 'User credentials not found' }), {
+        status: 404,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
     return new Response(JSON.stringify({ error: err?.message || 'Unexpected error' }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

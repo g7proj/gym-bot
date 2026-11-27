@@ -5,7 +5,8 @@ info:
   description: >
     Authenticated serverless proxy endpoints deployed on Supabase Edge Functions (Deno).
     They bridge the React frontend with the external InfoYou TeamSystem gym portal while
-    keeping user gym passwords encrypted at rest (AES-256-GCM) in Postgres.
+    keeping user gym passwords and short-lived portal session tokens (`AuthToken`, 15-minute
+    TTL in `public.gym_session_cache`) encrypted at rest with AES-256-GCM.
 
     All protected endpoints verify the Supabase JWT server-side via `supabaseAdmin.auth.getUser(token)`.
 servers:
