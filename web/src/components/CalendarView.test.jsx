@@ -153,4 +153,87 @@ describe('CalendarView', () => {
     });
     expect(onSelectDate).toHaveBeenCalledWith('2026-05-15');
   });
+
+  test('does not leak booking status onto a canceled earlier week sharing the same recurring idLesson', () => {
+    const recurringDays = [
+      {
+        date: '2026-05-14',
+        items: [
+          {
+            idLesson: 101,
+            idService: 10,
+            date: '2026-05-14',
+            startTime: '18:00',
+            endTime: '19:00',
+            service: 'PILATES',
+            category: 'CORSI FIT',
+            availablePlaces: 5,
+            // Even if calendar still carried stale isUserPresent=true, myBookings is authoritative:
+            isUserPresent: true,
+            waitingListPosition: 0,
+          },
+        ],
+      },
+      {
+        date: '2026-05-21',
+        items: [
+          {
+            idLesson: 101,
+            idService: 10,
+            date: '2026-05-21',
+            startTime: '18:00',
+            endTime: '19:00',
+            service: 'PILATES',
+            category: 'CORSI FIT',
+            availablePlaces: 3,
+            isUserPresent: true,
+            waitingListPosition: 0,
+          },
+        ],
+      },
+    ];
+
+    // Only 2026-05-21 remains booked in myBookings; 2026-05-14 was canceled.
+    const bookingsAfterCancel = [
+      {
+        bookingId: 9999,
+        idLesson: 101,
+        date: '2026-05-21',
+        startTime: '18:00',
+        endTime: '19:00',
+        service: 'PILATES',
+        isUserPresent: true,
+        waitingListPosition: 0,
+      },
+    ];
+
+    act(() => {
+      root.render(
+        <CalendarView
+          days={recurringDays}
+          meta={{ startDate: '2026-05-01', endDate: '2026-05-31' }}
+          myBookings={bookingsAfterCancel}
+          selectedDate="2026-05-14"
+          onSelectDate={jest.fn()}
+          onRefresh={jest.fn()}
+          onBook={jest.fn()}
+          onCancel={jest.fn()}
+        />,
+      );
+    });
+
+    // Selected canceled day (2026-05-14) should show Book, not Cancel, and disappear in "My bookings".
+    const buttonsAll = Array.from(container.querySelectorAll('button')).map((b) => b.textContent);
+    expect(buttonsAll).toContain('Book');
+    expect(buttonsAll).not.toContain('Cancel');
+
+    const myBookingsFilterBtn = Array.from(container.querySelectorAll('button')).find(
+      (btn) => btn.textContent === 'My bookings',
+    );
+    act(() => {
+      myBookingsFilterBtn.click();
+    });
+
+    expect(container.textContent).toContain('No courses available.');
+  });
 });
