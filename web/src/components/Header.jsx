@@ -8,6 +8,8 @@ export default function Header({
   onTabChange,
   theme,
   onToggleTheme,
+  telegramConnected,
+  onOpenTelegram,
   onOpenChangePassword,
   onLogout,
 }) {
@@ -141,6 +143,26 @@ export default function Header({
                           {username}
                         </div>
                       </div>
+                    )}
+                    {onOpenTelegram && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMenuOpen(false);
+                          onOpenTelegram();
+                        }}
+                        className="flex w-full items-center justify-between gap-2 rounded px-2.5 py-1.5 text-left text-xs font-medium text-slate-700 transition hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
+                      >
+                        <span>Telegram alerts</span>
+                        <span
+                          className={`h-2 w-2 rounded-full ${
+                            telegramConnected
+                              ? 'bg-emerald-500'
+                              : 'bg-slate-300 dark:bg-slate-600'
+                          }`}
+                          title={telegramConnected ? 'Connected' : 'Not linked'}
+                        />
+                      </button>
                     )}
                     <button
                       type="button"

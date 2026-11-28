@@ -28,6 +28,8 @@ tags:
     description: User bookings, class reservation, waitlist, and cancellation
   - name: Automation
     description: Scheduled machine-to-machine class booking runner
+  - name: Notifications
+    description: Telegram deep-link account pairing and webhook receiver
 
 components:
   securitySchemes:
@@ -40,6 +42,11 @@ components:
       type: http
       scheme: bearer
       description: Shared `CRON_SECRET` token verified in constant time by `gym-auto-book`.
+    TelegramWebhookSecret:
+      type: apiKey
+      in: header
+      name: X-Telegram-Bot-Api-Secret-Token
+      description: Shared `TELEGRAM_WEBHOOK_SECRET` verified in constant time by `telegram-webhook`.
 
   schemas:
     ErrorResponse:
@@ -370,6 +377,7 @@ components:
         - bookedCount
         - wouldBookCount
         - failedUsers
+        - notifiedUsers
         - results
       properties:
         success:
@@ -399,6 +407,9 @@ components:
           type: integer
         failedUsers:
           type: integer
+        notifiedUsers:
+          type: integer
+          description: Number of failed users notified via Telegram during this run.
         results:
           type: array
           items:
@@ -797,6 +808,108 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
         '500':
           description: Missing server configuration or database error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /telegram-link:
+    post:
+      tags: [Notifications]
+      summary: Generate a single-use Telegram deep link or disconnect error alerts
+      description: >
+        When `action` is `"create"` (default), stores a short-lived SHA-256 hashed token in
+        `public.telegram_link_tokens` and returns `https://t.me/<bot>?start=<token>`.
+        When `action` is `"disconnect"`, deletes the user's `public.telegram_connections` record.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                action:
+                  type: string
+                  enum: [create, disconnect]
+                  default: create
+      responses:
+        '200':
+          description: Deep-link payload or disconnect confirmation
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - type: object
+                    required: [url, bot_username, expires_at, expires_in_seconds]
+                    properties:
+                      url:
+                        type: string
+                        example: https://t.me/gym_bot?start=AbCdEf1234567890_XyZ9876543210ab
+                      bot_username:
+                        type: string
+                        example: gym_bot
+                      expires_at:
+                        type: string
+                        format: date-time
+                      expires_in_seconds:
+                        type: integer
+                        example: 900
+                  - $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          description: Invalid action
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '503':
+          description: Telegram bot token not configured on server
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /telegram-webhook:
+    post:
+      tags: [Notifications]
+      summary: Receive Telegram Bot updates for `/start <token>` and `/stop`
+      description: >
+        Validates `X-Telegram-Bot-Api-Secret-Token` in constant time against `TELEGRAM_WEBHOOK_SECRET`,
+        consumes single-use deep-link tokens from `public.telegram_link_tokens`, and links or unlinks
+        `public.telegram_connections`.
+      security:
+        - TelegramWebhookSecret: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Telegram Bot API Update payload
+      responses:
+        '200':
+          description: Update processed
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, action]
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  action:
+                    type: string
+                    example: connected
+        '401':
+          description: Missing or invalid `X-Telegram-Bot-Api-Secret-Token`
           content:
             application/json:
               schema:

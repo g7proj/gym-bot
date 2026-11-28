@@ -12,6 +12,7 @@
 import { bookLesson, listWithMine } from './gymClient.ts';
 import { withGymSession } from './gymSession.ts';
 import { formatApiTime, getBookingWindowStrings, getZonedParts } from './schedule.ts';
+import { formatAutoBookErrorAlert, sendTelegramMessage } from './telegram.ts';
 
 const DEFAULT_TIMEZONE = 'Europe/Rome';
 const LOCK_TTL_MINUTES = 20;
@@ -54,6 +55,7 @@ export interface AutoBookSummary {
   bookedCount: number;
   wouldBookCount: number;
   failedUsers: number;
+  notifiedUsers: number;
   results: UserRunResult[];
 }
 
@@ -72,6 +74,8 @@ export interface AutoBookDeps {
   ) => Promise<any>;
   bookLessonFn?: (token: string, payload: Record<string, unknown>) => Promise<any>;
   loginFn?: (username: string, password: string) => Promise<string>;
+  telegramBotToken?: string;
+  sendTelegramFn?: (botToken: string, chatId: string, htmlText: string) => Promise<boolean>;
 }
 
 /**
@@ -223,6 +227,7 @@ export async function runAutoBooking(
       bookedCount: 0,
       wouldBookCount: 0,
       failedUsers: 0,
+      notifiedUsers: 0,
       results: [],
     };
   }
@@ -248,6 +253,7 @@ export async function runAutoBooking(
       bookedCount: 0,
       wouldBookCount: 0,
       failedUsers: 0,
+      notifiedUsers: 0,
       results: [],
     };
   }
@@ -567,6 +573,76 @@ export async function runAutoBooking(
     }
   }
 
+  // Best-effort Telegram error alerts (never run in dryRun, never block or fail the job).
+  let notifiedUsers = 0;
+  if (!dryRun && failedUsers > 0) {
+    const botToken = String(
+      deps.telegramBotToken ?? Deno.env.get('TELEGRAM_BOT_TOKEN') ?? '',
+    ).trim();
+    const sendFn = deps.sendTelegramFn || sendTelegramMessage;
+
+    if (botToken || deps.sendTelegramFn) {
+      try {
+        const failedResults = results.filter((res) => res.outcome === 'failed');
+        const failedUserIds = failedResults.map((res) => res.userId);
+        const usernameById = new Map(users.map((u) => [String(u.id), String(u.username || '')]));
+
+        const { data: tgRows } = await supabaseAdmin
+          .from('telegram_connections')
+          .select('user_id, chat_id, enabled, last_error_notified_date')
+          .in('user_id', failedUserIds);
+
+        const connByUser = new Map<string, Record<string, any>>();
+        for (const row of (tgRows || []) as Record<string, any>[]) {
+          if (row?.user_id && row?.chat_id && row?.enabled !== false) {
+            connByUser.set(String(row.user_id), row);
+          }
+        }
+
+        for (const failedRes of failedResults) {
+          const conn = connByUser.get(failedRes.userId);
+          if (!conn) continue;
+
+          // Send at most one error alert per user per day so backup retries do not spam.
+          const alreadyNotifiedToday =
+            String(conn.last_error_notified_date || '').slice(0, 10) === zoned.isoDate;
+          if (alreadyNotifiedToday) continue;
+
+          const desiredSlots = prefsByUser.get(failedRes.userId) || [];
+          const desiredCourses = desiredSlots
+            .map((slot) => {
+              const normalized = normalizePreferenceSlot(slot);
+              if (!normalized) return '';
+              return `${normalized[0].toUpperCase()} (${normalized[1].slice(0, 5)})`;
+            })
+            .filter(Boolean);
+
+          const alertHtml = formatAutoBookErrorAlert({
+            username: usernameById.get(failedRes.userId) || '',
+            targetDate: windowStrings.targetDate,
+            targetWeekday: windowStrings.targetWeekday,
+            desiredCourses,
+            error: failedRes.error || 'Automated booking failed',
+          });
+
+          const sent = await sendFn(botToken, String(conn.chat_id), alertHtml);
+          if (sent) {
+            notifiedUsers += 1;
+            await supabaseAdmin
+              .from('telegram_connections')
+              .update({
+                last_error_notified_date: zoned.isoDate,
+                updated_at: nowFn().toISOString(),
+              })
+              .eq('user_id', failedRes.userId);
+          }
+        }
+      } catch (_notifyErr) {
+        // Swallow notification errors so booking summary still returns cleanly.
+      }
+    }
+  }
+
   return {
     timeZone,
     runDate: zoned.isoDate,
@@ -578,6 +654,7 @@ export async function runAutoBooking(
     bookedCount,
     wouldBookCount,
     failedUsers,
+    notifiedUsers,
     results,
   };
 }

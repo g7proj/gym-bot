@@ -6,11 +6,14 @@ import Header from './components/Header';
 import LoadingOverlay from './components/LoadingOverlay';
 import LoginForm from './components/LoginForm';
 import NoticeToast from './components/NoticeToast';
+import TelegramModal from './components/TelegramModal';
 import { supabase } from './services/supabaseClient';
 import {
   bookLesson,
   cancelLesson,
   changeGymPassword,
+  createTelegramLink,
+  disconnectTelegram,
   fetchCalendar,
   fetchCourses,
   fetchMyBookings,
@@ -37,6 +40,9 @@ function App() {
   const [activeTab, setActiveTab] = useState('calendar');
   const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
   const [passwordSuccess, setPasswordSuccess] = useState('');
+  const [telegramConnection, setTelegramConnection] = useState(null);
+  const [isTelegramModalOpen, setIsTelegramModalOpen] = useState(false);
+  const [telegramLinkUrl, setTelegramLinkUrl] = useState('');
 
   const selectedByUserRef = useRef(false);
   const loginInProgressRef = useRef(false);
@@ -84,6 +90,31 @@ function App() {
     }
   }, []);
 
+  const loadTelegramConnection = useCallback(async (id) => {
+    if (!id) {
+      setTelegramConnection(null);
+      return;
+    }
+    try {
+      const { data, error: tgError } = await supabase
+        .from('telegram_connections')
+        .select('telegram_username, enabled, connected_at')
+        .eq('user_id', id)
+        .maybeSingle();
+      if (tgError || !data) {
+        setTelegramConnection(null);
+        return;
+      }
+      setTelegramConnection({
+        telegramUsername: data.telegram_username || '',
+        enabled: data.enabled !== false,
+        connectedAt: data.connected_at || null,
+      });
+    } catch (_err) {
+      setTelegramConnection(null);
+    }
+  }, []);
+
   const loadUser = useCallback(async (id) => {
     return runWithPending(async () => {
       try {
@@ -98,6 +129,7 @@ function App() {
         if (!userRow) {
           setUser(null);
           setBookingRuns([]);
+          setTelegramConnection(null);
           return;
         }
         const [{ data: prefRows, error: prefError }] = await Promise.all([
@@ -106,6 +138,7 @@ function App() {
             .select('weekday, course, lesson_start_time')
             .eq('user_id', id),
           loadBookingRuns(id),
+          loadTelegramConnection(id),
         ]);
         if (prefError) {
           throw prefError;
@@ -128,7 +161,7 @@ function App() {
         setError('Failed to load user data');
       }
     });
-  }, [runWithPending, loadBookingRuns]);
+  }, [runWithPending, loadBookingRuns, loadTelegramConnection]);
 
   const loadCourses = useCallback(async () => {
     return runWithPending(async () => {
@@ -402,6 +435,39 @@ function App() {
     }
   };
 
+  const handleGenerateTelegramLink = async () => {
+    setLoading(true);
+    try {
+      await runWithPending(async () => {
+        const data = await createTelegramLink();
+        if (!data?.url) {
+          throw new Error('Unable to generate Telegram link.');
+        }
+        setTelegramLinkUrl(String(data.url));
+      });
+    } catch (err) {
+      setNotice({ type: 'error', message: err?.message || 'Unable to generate Telegram link.' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDisconnectTelegram = async () => {
+    setLoading(true);
+    try {
+      await runWithPending(async () => {
+        await disconnectTelegram();
+        setTelegramConnection(null);
+        setTelegramLinkUrl('');
+        setNotice({ type: 'info', message: 'Telegram alerts disconnected.' });
+      });
+    } catch (err) {
+      setNotice({ type: 'error', message: err?.message || 'Unable to disconnect Telegram.' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const resetClientState = useCallback(() => {
     setSessionUserId(null);
     setUser(null);
@@ -410,6 +476,9 @@ function App() {
     setCalendarMeta({ startDate: null, endDate: null });
     setMyBookings([]);
     setBookingRuns([]);
+    setTelegramConnection(null);
+    setTelegramLinkUrl('');
+    setIsTelegramModalOpen(false);
     coursesLoadedRef.current = false;
     selectedByUserRef.current = false;
     setSelectedDate(getTodayIsoLocal());
@@ -490,6 +559,27 @@ function App() {
     }
   }, [activeTab, user?.id, loadCalendar, loadMyBookings, loadBookingRuns, loadCourses]);
 
+  // Automatically refresh Telegram link status when returning from the Telegram app.
+  useEffect(() => {
+    const targetUserId = sessionUserId || user?.id;
+    if (!isTelegramModalOpen || !targetUserId || telegramConnection) {
+      return undefined;
+    }
+
+    const handleRefresh = () => {
+      if (document.visibilityState === 'visible') {
+        loadTelegramConnection(targetUserId).catch(() => {});
+      }
+    };
+
+    window.addEventListener('focus', handleRefresh);
+    document.addEventListener('visibilitychange', handleRefresh);
+    return () => {
+      window.removeEventListener('focus', handleRefresh);
+      document.removeEventListener('visibilitychange', handleRefresh);
+    };
+  }, [isTelegramModalOpen, sessionUserId, user?.id, telegramConnection, loadTelegramConnection]);
+
   return (
     <div className="min-h-screen bg-slate-50 pb-10 text-slate-900 dark:bg-slate-950 dark:text-slate-100">
       {isBusy && <LoadingOverlay />}
@@ -501,6 +591,11 @@ function App() {
         onTabChange={setActiveTab}
         theme={theme}
         onToggleTheme={handleToggleTheme}
+        telegramConnected={Boolean(telegramConnection && telegramConnection.enabled !== false)}
+        onOpenTelegram={() => {
+          setTelegramLinkUrl('');
+          setIsTelegramModalOpen(true);
+        }}
         onOpenChangePassword={() => {
           setPasswordSuccess('');
           setIsChangePasswordOpen(true);
@@ -522,6 +617,11 @@ function App() {
             user={user}
             coursesByDay={coursesByDay}
             bookingRuns={bookingRuns}
+            telegramConnection={telegramConnection}
+            onOpenTelegram={() => {
+              setTelegramLinkUrl('');
+              setIsTelegramModalOpen(true);
+            }}
             onRefreshStatus={() => loadBookingRuns(user.id)}
             onRefreshCourses={loadCourses}
             onUpdatePreferences={updatePreferences}
@@ -547,6 +647,17 @@ function App() {
         onSubmit={handleChangePassword}
         loading={loading}
         successMessage={passwordSuccess}
+      />
+
+      <TelegramModal
+        open={isTelegramModalOpen}
+        onClose={() => setIsTelegramModalOpen(false)}
+        connection={telegramConnection}
+        deepLinkUrl={telegramLinkUrl}
+        loading={loading}
+        onGenerateLink={handleGenerateTelegramLink}
+        onCheckStatus={() => loadTelegramConnection(sessionUserId || user?.id)}
+        onDisconnect={handleDisconnectTelegram}
       />
     </div>
   );

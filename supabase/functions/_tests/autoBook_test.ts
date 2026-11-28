@@ -39,16 +39,23 @@ interface MockAutoBookDbConfig {
   preferences: { user_id: string; weekday: string; course: string; lesson_start_time: string }[];
   lockAcquired?: boolean;
   lockStatus?: string;
+  telegramConnections?: {
+    user_id: string;
+    chat_id: string;
+    enabled?: boolean;
+    last_error_notified_date?: string | null;
+  }[];
 }
 
 function createMockAutoBookAdmin(config: MockAutoBookDbConfig) {
   const lockUpdates: Record<string, unknown>[] = [];
+  const telegramConnections = (config.telegramConnections || []).map((c) => ({ ...c }));
   let rpcCalls = 0;
   let cacheRow: { token_encrypted: string; expires_at: string } | null = null;
 
   return {
     get stats() {
-      return { rpcCalls, lockUpdates };
+      return { rpcCalls, lockUpdates, telegramConnections };
     },
     async rpc(fnName: string) {
       if (fnName !== 'acquire_booking_lock') {
@@ -141,6 +148,31 @@ function createMockAutoBookAdmin(config: MockAutoBookDbConfig) {
             return {
               async match(filter: Record<string, unknown>) {
                 lockUpdates.push({ ...values, ...filter });
+                return { error: null };
+              },
+            };
+          },
+        };
+      }
+      if (table === 'telegram_connections') {
+        return {
+          select() {
+            return {
+              async in(_col: string, ids: string[]) {
+                return {
+                  data: telegramConnections.filter((c) => ids.includes(c.user_id)),
+                  error: null,
+                };
+              },
+            };
+          },
+          update(values: Record<string, unknown>) {
+            return {
+              async eq(_col: string, userId: string) {
+                const found = telegramConnections.find((c) => c.user_id === userId);
+                if (found && values.last_error_notified_date !== undefined) {
+                  found.last_error_notified_date = String(values.last_error_notified_date);
+                }
                 return { error: null };
               },
             };
@@ -323,4 +355,69 @@ Deno.test('runAutoBooking: dryRun skips lock RPC, lock updates, and bookLesson c
   assertEquals(admin.stats.lockUpdates.length, 0);
   assertEquals(summary.wouldBookCount, 1);
   assertEquals(summary.results[0].slots[0].outcome, 'would_book');
+});
+
+Deno.test('runAutoBooking: sends one Telegram alert per day on login/password failure and skips in dryRun', async () => {
+  Deno.env.set('ENCRYPTION_KEY', makeTestKey());
+  const encryptedPw = await encryptString('expired-pass');
+  const admin = createMockAutoBookAdmin({
+    users: [{ id: 'user-1', username: 'mario', password_encrypted: encryptedPw }],
+    preferences: [
+      { user_id: 'user-1', weekday: 'wednesday', course: 'pilates', lesson_start_time: '18:00:00' },
+    ],
+    telegramConnections: [
+      { user_id: 'user-1', chat_id: '555123', enabled: true, last_error_notified_date: null },
+    ],
+  });
+
+  const sentAlerts: { chatId: string; html: string }[] = [];
+  const mockSendTelegram = async (_token: string, chatId: string, html: string) => {
+    sentAlerts.push({ chatId, html });
+    return true;
+  };
+
+  // 1. dryRun never sends Telegram alerts even when login fails.
+  await runAutoBooking(admin, {
+    dryRun: true,
+    timeZone: 'Europe/Rome',
+    now: () => new Date('2026-05-01T05:30:00Z'),
+    loginFn: async () => {
+      throw new Error('Login not successful');
+    },
+    telegramBotToken: 'bot-tok',
+    sendTelegramFn: mockSendTelegram,
+  });
+  assertEquals(sentAlerts.length, 0);
+
+  // 2. Real run sends alert once and records last_error_notified_date = 2026-05-01.
+  const firstRun = await runAutoBooking(admin, {
+    timeZone: 'Europe/Rome',
+    now: () => new Date('2026-05-01T05:30:00Z'),
+    loginFn: async () => {
+      throw new Error('Login not successful');
+    },
+    telegramBotToken: 'bot-tok',
+    sendTelegramFn: mockSendTelegram,
+  });
+  assertEquals(firstRun.failedUsers, 1);
+  assertEquals(firstRun.notifiedUsers, 1);
+  assertEquals(sentAlerts.length, 1);
+  assertEquals(sentAlerts[0].chatId, '555123');
+  assertEquals(sentAlerts[0].html.includes('PILATES (18:00)'), true);
+  assertEquals(sentAlerts[0].html.includes('password may have expired'), true);
+  assertEquals(admin.stats.telegramConnections[0].last_error_notified_date, '2026-05-01');
+
+  // 3. Same-day retry does not send a duplicate alert.
+  const retryRun = await runAutoBooking(admin, {
+    timeZone: 'Europe/Rome',
+    now: () => new Date('2026-05-01T07:17:00Z'),
+    loginFn: async () => {
+      throw new Error('Login not successful');
+    },
+    telegramBotToken: 'bot-tok',
+    sendTelegramFn: mockSendTelegram,
+  });
+  assertEquals(retryRun.failedUsers, 1);
+  assertEquals(retryRun.notifiedUsers, 0);
+  assertEquals(sentAlerts.length, 1);
 });

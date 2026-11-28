@@ -16,9 +16,10 @@ Instructions for AI coding agents working on the **gym-bot** repository.
   - `_shared/gymClient.ts` — HTTP client for the InfoYou API with 10s timeouts and sanitized network errors.
   - `_shared/gymSession.ts` — encrypted 15-minute `AuthToken` cache (`public.gym_session_cache`) with automatic refresh on auth expiry.
   - `_shared/schedule.ts` — `Europe/Rome` date/time and 20-day booking window helpers.
+  - `_shared/telegram.ts` — Telegram Bot deep-link token helpers, constant-time webhook secret verification, and best-effort HTML error alerts.
   - `_shared/autoBook.ts` — core automated booking engine and constant-time `CRON_SECRET` verifier.
-  - `_tests/` — offline Deno unit test suites (`gymSession_test.ts`, `autoBook_test.ts`).
-  - Endpoints: `gym-login`, `gym-recover`, `gym-change-password`, `gym-courses`, `gym-calendar`, `gym-mybooks`, `gym-book`, `gym-cancel`, `gym-auto-book`.
+  - `_tests/` — offline Deno unit test suites (`gymSession_test.ts`, `autoBook_test.ts`, `telegram_test.ts`).
+  - Endpoints: `gym-login`, `gym-recover`, `gym-change-password`, `gym-courses`, `gym-calendar`, `gym-mybooks`, `gym-book`, `gym-cancel`, `gym-auto-book`, `telegram-link`, `telegram-webhook`.
 - `supabase/migrations/` — Authoritative Postgres schema, RLS policies, `acquire_booking_lock`, and `pg_cron` + `pg_net` 07:01 `Europe/Rome` scheduler (`public.trigger_gym_auto_book`).
 - `scripts/` — Local Windows PowerShell development scripts (`dev-start.ps1`, `dev-stop.ps1`).
 - `.github/workflows/` — `ci.yml` (Deno + Jest + React build), `pages.yml` (GitHub Pages deploy), `deploy-supabase.yml` (migrations + Edge Functions deploy), and `book.yml` (daily backup + Free-Tier keep-alive trigger for `gym-auto-book`).
@@ -41,7 +42,7 @@ Instructions for AI coding agents working on the **gym-bot** repository.
 ## Security & Coding Standards
 
 - **Language**: All code, comments, docstrings, commit messages, and documentation must be written in **English**.
-- **Secrets**: Never log or print `ENCRYPTION_KEY`, `CRON_SECRET`, plaintext passwords, encrypted payloads/IVs, `Authorization` headers, or full URLs for `/security/webauthenticate` and `/security/changepassword`.
+- **Secrets**: Never log or print `ENCRYPTION_KEY`, `CRON_SECRET`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`, plaintext passwords, encrypted payloads/IVs, `Authorization` headers, or full URLs for `/security/webauthenticate`, `/security/changepassword`, and Telegram Bot API calls.
 - **Environment files**: Never commit `.env`, `.env.local`, `supabase/.env`, `supabase/functions/.env`, or `web/.env.development`. Update `.env.example` / `web/.env.example` when introducing new variables.
 - **CORS**: All Edge Functions must use `getCorsHeaders(req)` and `handleOptions(corsHeaders)` from `supabase/functions/_shared/http.ts`. Never reintroduce hardcoded `'Access-Control-Allow-Origin': '*'`.
 - **API documentation**: Whenever an Edge Function endpoint or InfoYou API call is added or modified, update the corresponding OpenAPI spec in `docs/openapi/`.
