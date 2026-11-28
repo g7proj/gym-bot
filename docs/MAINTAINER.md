@@ -148,6 +148,10 @@ supabase secrets set ALLOWED_ORIGINS="https://g7proj.github.io"
 # supabase secrets set GYM_TOKEN_TTL_MINUTES="15"
 # Optional if the portal rotates its AppToken:
 # supabase secrets set GYM_APP_TOKEN="<portal-app-token>"
+# Optional: Telegram Bot error alerts for 07:01 automated bookings
+supabase secrets set TELEGRAM_BOT_TOKEN="<botfather-token>"
+supabase secrets set TELEGRAM_BOT_USERNAME="<bot-username-without-at>"
+supabase secrets set TELEGRAM_WEBHOOK_SECRET="<random-strong-webhook-secret>"
 ```
 
 > Supabase automatically injects `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, and `SUPABASE_DB_URL`. Neither `ENCRYPTION_KEY` nor direct `DATABASE_URL` needs to be stored in GitHub Actions anymore.
@@ -205,6 +209,33 @@ Get-ChildItem supabase\functions -Directory |
     ```
   - To update an existing Vault secret later (e.g. when rotating `CRON_SECRET`), update it via Dashboard → **Integrations → Vault** or `vault.update_secret(id, '<new-secret>')`.
 - **Backup & Keep-Alive Job (`.github/workflows/book.yml`)**: runs once daily (`17 7 * * *` UTC) to keep the Supabase Free Tier project active (preventing the 7-day inactivity pause) and retry any failed 07:01 booking, and can also be triggered manually via **Actions → Daily Gym Booking → Run workflow** (`dry_run` / `force_time`).
+
+### 4.4 Configuring Telegram Auto-Book Error Alerts
+
+1. Open Telegram, chat with **@BotFather**, and run `/newbot` to obtain your `TELEGRAM_BOT_TOKEN` and `TELEGRAM_BOT_USERNAME` (e.g. `my_gym_alerts_bot`).
+2. Generate a random `TELEGRAM_WEBHOOK_SECRET` in PowerShell:
+   ```powershell
+   $bytes = New-Object byte[] 24
+   [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
+   [BitConverter]::ToString($bytes).Replace("-", "").ToLower()
+   ```
+3. Set `TELEGRAM_BOT_TOKEN`, `TELEGRAM_BOT_USERNAME`, and `TELEGRAM_WEBHOOK_SECRET` in Supabase Edge Function secrets (see Section 4.1) and ensure `telegram-link` and `telegram-webhook` are deployed.
+4. Register the webhook with Telegram **once** from PowerShell:
+   ```powershell
+   $botToken = "<your-telegram-bot-token>"
+   $webhookSecret = "<your-telegram-webhook-secret>"
+   $webhookUrl = "https://<your-project-ref>.supabase.co/functions/v1/telegram-webhook"
+
+   Invoke-RestMethod -Uri "https://api.telegram.org/bot$botToken/setWebhook" `
+     -Method POST `
+     -ContentType "application/json" `
+     -Body (@{
+       url = $webhookUrl
+       secret_token = $webhookSecret
+       allowed_updates = @("message")
+     } | ConvertTo-Json)
+   ```
+5. Each user can then sign in to the web app, open **Telegram alerts**, generate a deep link, and tap **Start** in Telegram to receive 07:01 automated booking failure notifications (at most one error alert per day per user).
 
 ---
 

@@ -399,3 +399,10 @@ verify_jwt = false
 [functions.gym-auto-book]
 verify_jwt = false
 
+[functions.telegram-link]
+verify_jwt = false
+
+[functions.telegram-webhook]
+verify_jwt = false
+
+

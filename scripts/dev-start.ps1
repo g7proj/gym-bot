@@ -101,6 +101,11 @@ $localEnvLines = @(
 if ($gymToken) {
   $localEnvLines += "GYM_APP_TOKEN=$gymToken"
 }
+foreach ($optionalKey in @('TELEGRAM_BOT_TOKEN', 'TELEGRAM_BOT_USERNAME', 'TELEGRAM_WEBHOOK_SECRET')) {
+  if ($secrets[$optionalKey]) {
+    $localEnvLines += "$optionalKey=$($secrets[$optionalKey])"
+  }
+}
 Write-TextNoBom -Path $localEnvPath -Lines $localEnvLines
 Write-Host "Wrote local Edge secrets to $localEnvPath" -ForegroundColor Green
 

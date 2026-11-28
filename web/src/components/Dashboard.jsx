@@ -83,6 +83,8 @@ export default function Dashboard({
   user,
   coursesByDay,
   bookingRuns = [],
+  telegramConnection = null,
+  onOpenTelegram,
   onRefreshStatus,
   onRefreshCourses,
   onUpdatePreferences,
@@ -222,6 +224,30 @@ export default function Dashboard({
           </div>
 
           <div className="flex items-center gap-1.5">
+            {onOpenTelegram && (
+              <button
+                type="button"
+                onClick={onOpenTelegram}
+                className={`inline-flex items-center gap-1 rounded border px-2 py-0.5 text-[11px] font-semibold transition ${
+                  telegramConnection && telegramConnection.enabled !== false
+                    ? 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300'
+                    : 'border-brand/30 bg-brand/5 text-brand hover:bg-brand/10 dark:border-brand-light/30 dark:bg-brand-light/10 dark:text-brand-light'
+                }`}
+              >
+                <span
+                  className={`h-1.5 w-1.5 rounded-full ${
+                    telegramConnection && telegramConnection.enabled !== false
+                      ? 'bg-emerald-500'
+                      : 'bg-brand dark:bg-brand-light'
+                  }`}
+                />
+                <span>
+                  {telegramConnection && telegramConnection.enabled !== false
+                    ? 'Telegram ✓'
+                    : 'Connect Telegram'}
+                </span>
+              </button>
+            )}
             {bookingRuns.length > 1 && (
               <button
                 type="button"

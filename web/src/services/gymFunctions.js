@@ -79,3 +79,13 @@ export async function changeGymPassword(oldPassword, newPassword) {
   });
 }
 
+// Generate a single-use Telegram deep link (`https://t.me/<bot>?start=<token>`).
+export async function createTelegramLink() {
+  return invokeWithSession('telegram-link', { action: 'create' });
+}
+
+// Disconnect Telegram error notifications for the authenticated user.
+export async function disconnectTelegram() {
+  return invokeWithSession('telegram-link', { action: 'disconnect' });
+}
+
