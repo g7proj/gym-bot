@@ -236,4 +236,91 @@ describe('CalendarView', () => {
 
     expect(container.textContent).toContain('No courses available.');
   });
+
+  test('renders one month grid at a time and switches months cleanly', () => {
+    const onSelectDate = jest.fn();
+
+    act(() => {
+      root.render(
+        <CalendarView
+          days={sampleDays}
+          meta={{ startDate: '2026-05-20', endDate: '2026-06-08' }}
+          myBookings={[]}
+          selectedDate="2026-05-20"
+          onSelectDate={onSelectDate}
+          onRefresh={jest.fn()}
+          onBook={jest.fn()}
+          onCancel={jest.fn()}
+        />,
+      );
+    });
+
+    // Active month starts at 2026-05-20, so day "1" (from June) is not rendered yet.
+    const day1Before = Array.from(container.querySelectorAll('button')).find(
+      (btn) => btn.textContent.trim() === '1',
+    );
+    expect(day1Before).toBeUndefined();
+
+    const nextMonthBtn = container.querySelector('button[aria-label="Next month"]');
+    expect(nextMonthBtn).not.toBeNull();
+    act(() => {
+      nextMonthBtn.click();
+    });
+
+    const day1After = Array.from(container.querySelectorAll('button')).find(
+      (btn) => btn.textContent.trim() === '1',
+    );
+    expect(day1After).toBeDefined();
+    act(() => {
+      day1After.click();
+    });
+    expect(onSelectDate).toHaveBeenCalledWith('2026-06-01');
+  });
+
+  test('renders disabled Closed button when lesson has isLocked = 1', () => {
+    const onBook = jest.fn();
+    const lockedDays = [
+      {
+        date: '2026-05-20',
+        items: [
+          {
+            idLesson: 501,
+            idService: 10,
+            date: '2026-05-20',
+            startTime: '09:00',
+            endTime: '10:00',
+            service: 'MORNING STRETCH',
+            availablePlaces: 5,
+            isLocked: 1,
+            isUserPresent: false,
+            waitingListPosition: 0,
+          },
+        ],
+      },
+    ];
+
+    act(() => {
+      root.render(
+        <CalendarView
+          days={lockedDays}
+          meta={{ startDate: '2026-05-01', endDate: '2026-05-31' }}
+          myBookings={[]}
+          selectedDate="2026-05-20"
+          onSelectDate={jest.fn()}
+          onRefresh={jest.fn()}
+          onBook={onBook}
+          onCancel={jest.fn()}
+        />,
+      );
+    });
+
+    const closedBtn = Array.from(container.querySelectorAll('button')).find(
+      (btn) => btn.textContent.trim() === 'Closed',
+    );
+    expect(closedBtn).toBeDefined();
+    expect(closedBtn.disabled).toBe(true);
+    expect(
+      Array.from(container.querySelectorAll('button')).find((b) => b.textContent.trim() === 'Book'),
+    ).toBeUndefined();
+  });
 });

@@ -1,45 +1,41 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
+  darkMode: 'class',
   content: [
-    "./src/**/*.{js,jsx,ts,tsx}",
+    './src/**/*.{js,jsx,ts,tsx}',
   ],
   theme: {
     extend: {
       colors: {
         brand: {
-          DEFAULT: '#2a9d8f',
-          dark: '#21867a',
+          DEFAULT: '#4f46e5',
+          dark: '#4338ca',
+          light: '#818cf8',
         },
         accent: {
-          DEFAULT: '#5aa7d6',
-          dark: '#2d6f9a',
+          DEFAULT: '#6366f1',
+          dark: '#4f46e5',
         },
         success: {
-          DEFAULT: '#3aa981',
-          soft: '#dff3ec',
-          deep: '#1f7f66',
+          DEFAULT: '#10b981',
+          soft: '#d1fae5',
+          deep: '#065f46',
         },
         info: {
-          DEFAULT: '#5aa7d6',
-          soft: '#dbeaf6',
-          deep: '#2d6f9a',
+          DEFAULT: '#0ea5e9',
+          soft: '#e0f2fe',
+          deep: '#075985',
         },
         warning: {
-          DEFAULT: '#e6b05b',
-          soft: '#f9ebd2',
-          deep: '#a9701f',
+          DEFAULT: '#f59e0b',
+          soft: '#fef3c7',
+          deep: '#92400e',
         },
         danger: {
-          DEFAULT: '#e07a7a',
-          soft: '#f7dede',
-          deep: '#a84b4b',
+          DEFAULT: '#f43f5e',
+          soft: '#ffe4e6',
+          deep: '#9f1239',
         },
-        'opal-mist': '#eaf7f4',
-        'opal-pearl': '#f3f0ff',
-        'opal-sky': '#e7f3ff',
-        surface: '#ffffff',
-        'surface-soft': '#f7fbfb',
-        'surface-alt': '#eef6f7',
       },
       fontFamily: {
         sans: [
@@ -50,19 +46,6 @@ module.exports = {
           'Segoe UI',
           'sans-serif',
         ],
-      },
-      spacing: {
-        '18': '4.5rem',
-        '22': '5.5rem',
-        '28': '7rem',
-        '30': '7.5rem',
-      },
-      borderRadius: {
-        md: '0.375rem',
-        lg: '0.5rem',
-      },
-      boxShadow: {
-        soft: '0 10px 30px -20px rgba(36, 89, 86, 0.35)',
       },
     },
   },

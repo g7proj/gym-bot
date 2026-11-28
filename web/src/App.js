@@ -6,7 +6,6 @@ import Header from './components/Header';
 import LoadingOverlay from './components/LoadingOverlay';
 import LoginForm from './components/LoginForm';
 import NoticeToast from './components/NoticeToast';
-import Sidebar from './components/Sidebar';
 import { supabase } from './services/supabaseClient';
 import {
   bookLesson,
@@ -16,11 +15,13 @@ import {
   fetchCourses,
   fetchMyBookings,
 } from './services/gymFunctions';
-import { getSession, signInOrSignUp } from './services/auth';
+import { getSession, reauthenticateUser, signInOrSignUp } from './services/auth';
 import { getTodayIsoLocal } from './utils/date';
 import { extractFunctionError } from './utils/functionError';
+import { applyTheme, getInitialTheme } from './utils/theme';
 
 function App() {
+  const [theme, setTheme] = useState(getInitialTheme);
   const [sessionUserId, setSessionUserId] = useState(null);
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -34,15 +35,24 @@ function App() {
   const [bookingRuns, setBookingRuns] = useState([]);
   const [notice, setNotice] = useState(null);
   const [activeTab, setActiveTab] = useState('calendar');
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
   const [passwordSuccess, setPasswordSuccess] = useState('');
+
   const selectedByUserRef = useRef(false);
   const loginInProgressRef = useRef(false);
+  const coursesLoadedRef = useRef(false);
 
   const isBusy = pendingCount > 0;
 
-  // Tracks async work so we can show a consistent loading overlay.
+  useEffect(() => {
+    applyTheme(theme);
+  }, [theme]);
+
+  const handleToggleTheme = useCallback(() => {
+    setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'));
+  }, []);
+
+  // Tracks async work so we can show a subtle non-jarring syncing indicator.
   const runWithPending = useCallback(async (fn) => {
     setPendingCount((count) => count + 1);
     try {
@@ -125,6 +135,7 @@ function App() {
       try {
         const byDay = await fetchCourses();
         setCoursesByDay(byDay || {});
+        coursesLoadedRef.current = true;
       } catch (_err) {
         setCoursesByDay({});
         setNotice({ type: 'warning', message: 'Unable to load courses for this week.' });
@@ -138,11 +149,9 @@ function App() {
     loginInProgressRef.current = true;
     try {
       await runWithPending(async () => {
-        // Step 1: Supabase Auth
         const session = await signInOrSignUp(username, password);
         if (!session?.access_token) throw new Error('Missing auth session');
 
-        // Step 2: gym-login Edge Function (validates gym credentials and stores them in DB)
         const { data, error: invokeError } = await supabase.functions.invoke('gym-login', {
           body: { username, password },
           headers: { Authorization: `Bearer ${session.access_token}` },
@@ -155,7 +164,6 @@ function App() {
           throw new Error(String(data.error));
         }
 
-        // Step 3: load user profile from public.users
         const currentUserId = data?.user_id || session.user.id;
         setSessionUserId(currentUserId);
         await Promise.all([loadUser(currentUserId), loadCourses()]);
@@ -189,9 +197,14 @@ function App() {
 
     setLoading(true);
     setPasswordSuccess('');
+    loginInProgressRef.current = true;
     try {
       await runWithPending(async () => {
         await changeGymPassword(oldPassword, newPassword);
+        // Updating the password in GoTrue revokes the old session; re-authenticate seamlessly.
+        if (user?.credentials?.username) {
+          await reauthenticateUser(user.credentials.username, newPassword);
+        }
         setPasswordSuccess('Password updated successfully.');
         setNotice({ type: 'success', message: 'Password updated.' });
       });
@@ -200,13 +213,15 @@ function App() {
       if (message.toLowerCase().includes('password') || message.toLowerCase().includes('login')) {
         setNotice({ type: 'error', message: 'Wrong credentials' });
       } else {
-        setNotice({ type: 'error', message: err?.message || 'Unable to change password.' });
+        setNotice({ type: 'error', message: message || 'Unable to change password.' });
       }
     } finally {
+      loginInProgressRef.current = false;
       setLoading(false);
     }
   };
 
+  // Must not depend on `selectedDate` so clicking calendar days stays client-side.
   const loadCalendar = useCallback(async () => {
     return runWithPending(async () => {
       try {
@@ -286,6 +301,7 @@ function App() {
     await Promise.all([loadCalendar(), loadMyBookings()]);
   };
 
+  // Atomic preference save: upsert new rows before deleting removed ones.
   const updatePreferences = async (preferences) => {
     setLoading(true);
     setError('');
@@ -322,7 +338,6 @@ function App() {
 
         const rows = Array.from(rowMap.values());
 
-        // Fetch existing preferences first so we can upsert new slots before removing old ones.
         const { data: existingRows, error: existingError } = await supabase
           .from('preferences')
           .select('weekday, course, lesson_start_time')
@@ -387,8 +402,7 @@ function App() {
     }
   };
 
-  const handleLogout = () => {
-    supabase.auth.signOut().catch(() => {});
+  const resetClientState = useCallback(() => {
     setSessionUserId(null);
     setUser(null);
     setCoursesByDay({});
@@ -396,8 +410,14 @@ function App() {
     setCalendarMeta({ startDate: null, endDate: null });
     setMyBookings([]);
     setBookingRuns([]);
+    coursesLoadedRef.current = false;
     selectedByUserRef.current = false;
     setSelectedDate(getTodayIsoLocal());
+  }, []);
+
+  const handleLogout = () => {
+    supabase.auth.signOut().catch(() => {});
+    resetClientState();
   };
 
   const handleSelectDate = (date) => {
@@ -430,19 +450,10 @@ function App() {
       setSessionUserId(userId);
 
       if (!userId) {
-        setUser(null);
-        setCoursesByDay({});
-        setCalendarDays([]);
-        setCalendarMeta({ startDate: null, endDate: null });
-        setMyBookings([]);
-        setBookingRuns([]);
-        selectedByUserRef.current = false;
-        setSelectedDate(getTodayIsoLocal());
+        resetClientState();
         return;
       }
 
-      // Skip duplicate startup load (handled by initSession), background token refreshes,
-      // and intermediate SIGNED_IN events while handleLogin is still running gym-login.
       if (
         event === 'INITIAL_SESSION'
         || event === 'TOKEN_REFRESHED'
@@ -458,10 +469,10 @@ function App() {
       subscription?.subscription?.unsubscribe?.();
       subscription?.unsubscribe?.();
     };
-  }, [loadUser]);
+  }, [loadUser, resetClientState]);
 
   useEffect(() => {
-    if (!notice) return;
+    if (!notice) return undefined;
     const timer = setTimeout(() => setNotice(null), 3500);
     return () => clearTimeout(timer);
   }, [notice]);
@@ -473,69 +484,62 @@ function App() {
       loadMyBookings().catch(() => {});
     } else if (activeTab === 'preferences') {
       loadBookingRuns(user.id).catch(() => {});
+      if (!coursesLoadedRef.current) {
+        loadCourses().catch(() => {});
+      }
     }
-  }, [activeTab, user?.id, loadCalendar, loadMyBookings, loadBookingRuns]);
+  }, [activeTab, user?.id, loadCalendar, loadMyBookings, loadBookingRuns, loadCourses]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-opal-mist via-opal-pearl to-opal-sky text-slate-900">
+    <div className="min-h-screen bg-slate-50 pb-10 text-slate-900 dark:bg-slate-950 dark:text-slate-100">
       {isBusy && <LoadingOverlay />}
       <NoticeToast notice={notice} />
-      <div className="flex">
-        {user && (
-          <Sidebar
+
+      <Header
+        user={user}
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        theme={theme}
+        onToggleTheme={handleToggleTheme}
+        onOpenChangePassword={() => {
+          setPasswordSuccess('');
+          setIsChangePasswordOpen(true);
+        }}
+        onLogout={handleLogout}
+      />
+
+      <main className="mx-auto max-w-5xl px-3 pt-3 sm:px-6 sm:pt-5">
+        {error && (
+          <div className="mb-3 rounded-md border border-rose-200 bg-rose-50 px-3.5 py-2.5 text-xs font-medium text-rose-700 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-300">
+            {error}
+          </div>
+        )}
+
+        {!user ? (
+          <LoginForm onLogin={handleLogin} loading={loading} />
+        ) : activeTab === 'preferences' ? (
+          <Dashboard
             user={user}
-            activeTab={activeTab}
-            onTabChange={setActiveTab}
-            isOpen={isMenuOpen}
-            onClose={() => setIsMenuOpen(false)}
+            coursesByDay={coursesByDay}
+            bookingRuns={bookingRuns}
+            onRefreshStatus={() => loadBookingRuns(user.id)}
+            onRefreshCourses={loadCourses}
+            onUpdatePreferences={updatePreferences}
+            loading={loading}
+          />
+        ) : (
+          <CalendarView
+            days={calendarDays}
+            meta={calendarMeta}
+            myBookings={myBookings}
+            selectedDate={selectedDate}
+            onSelectDate={handleSelectDate}
+            onRefresh={refreshCalendar}
+            onBook={handleBooking}
+            onCancel={handleCancel}
           />
         )}
-        <div className="flex-1 px-4 py-6 md:px-8">
-          <Header
-            user={user}
-            onToggleMenu={() => setIsMenuOpen((open) => !open)}
-            onRefreshCourses={loadCourses}
-            onLogout={handleLogout}
-          />
-
-          {error && (
-            <div className="mb-4 rounded-md border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-              {error}
-            </div>
-          )}
-
-          {!user ? (
-            <LoginForm
-              onLogin={handleLogin}
-              onChangePassword={() => {
-                setPasswordSuccess('');
-                setIsChangePasswordOpen(true);
-              }}
-              loading={loading}
-            />
-          ) : activeTab === 'preferences' ? (
-            <Dashboard
-              user={user}
-              coursesByDay={coursesByDay}
-              bookingRuns={bookingRuns}
-              onRefreshStatus={() => loadBookingRuns(user.id)}
-              onUpdatePreferences={updatePreferences}
-              loading={loading}
-            />
-          ) : (
-            <CalendarView
-              days={calendarDays}
-              meta={calendarMeta}
-              myBookings={myBookings}
-              selectedDate={selectedDate}
-              onSelectDate={handleSelectDate}
-              onRefresh={refreshCalendar}
-              onBook={handleBooking}
-              onCancel={handleCancel}
-            />
-          )}
-        </div>
-      </div>
+      </main>
 
       <ChangePasswordModal
         open={isChangePasswordOpen}
@@ -549,5 +553,3 @@ function App() {
 }
 
 export default App;
-
-

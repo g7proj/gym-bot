@@ -1,7 +1,7 @@
 import { useState } from 'react';
 
-// Simple credential form used before the Supabase session exists.
-export default function LoginForm({ onLogin, onChangePassword, loading }) {
+// Compact credential form used before a Supabase session exists.
+export default function LoginForm({ onLogin, loading }) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -12,32 +12,41 @@ export default function LoginForm({ onLogin, onChangePassword, loading }) {
   };
 
   return (
-    <div className="mx-auto w-full max-w-md rounded-md border border-slate-200 bg-white p-6 shadow-sm">
-      <h2 className="mb-2 text-lg font-semibold">Sign in</h2>
-      <p className="mb-4 text-sm text-slate-600">Use your gym portal credentials.</p>
-      <form onSubmit={handleSubmit}>
-        <div className="mb-4">
-          <label className="block text-sm font-medium text-slate-700" htmlFor="username">
+    <div className="mx-auto mt-4 w-full max-w-sm rounded-md border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:mt-10 sm:p-6">
+      <div className="mb-4">
+        <h2 className="text-base font-bold text-slate-900 dark:text-slate-100">Sign in</h2>
+        <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+          Use your gym portal credentials to manage bookings and preferences.
+        </p>
+      </div>
+
+      <form onSubmit={handleSubmit} className="space-y-3.5">
+        <div>
+          <label className="block text-xs font-medium text-slate-700 dark:text-slate-300" htmlFor="username">
             Username
           </label>
           <input
-            className="mt-2 w-full rounded-md border border-slate-300 px-3 py-2 text-slate-700 shadow-sm focus:border-slate-400 focus:outline-none"
             id="username"
             type="text"
+            autoComplete="username"
+            autoCapitalize="none"
+            className="mt-1.5 w-full rounded border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm transition focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
             required
           />
         </div>
-        <div className="mb-6">
-          <label className="block text-sm font-medium text-slate-700" htmlFor="password">
+
+        <div>
+          <label className="block text-xs font-medium text-slate-700 dark:text-slate-300" htmlFor="password">
             Password
           </label>
-          <div className="relative mt-2">
+          <div className="relative mt-1.5">
             <input
-              className="w-full rounded-md border border-slate-300 px-3 py-2 pr-10 text-slate-700 shadow-sm focus:border-slate-400 focus:outline-none"
               id="password"
               type={showPassword ? 'text' : 'password'}
+              autoComplete="current-password"
+              className="w-full rounded border border-slate-300 bg-white px-3 py-2 pr-14 text-sm text-slate-900 shadow-sm transition focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
@@ -45,27 +54,25 @@ export default function LoginForm({ onLogin, onChangePassword, loading }) {
             <button
               type="button"
               onClick={() => setShowPassword((value) => !value)}
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-xs font-semibold text-slate-500"
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-sm px-1.5 py-0.5 text-[11px] font-semibold text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
             >
               {showPassword ? 'Hide' : 'Show'}
             </button>
           </div>
         </div>
+
         <button
-          className="w-full rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-dark disabled:opacity-60"
+          className="mt-1 w-full rounded bg-brand px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-dark disabled:opacity-60"
           type="submit"
           disabled={loading}
         >
-          {loading ? 'Logging in...' : 'Sign In'}
+          {loading ? 'Signing in...' : 'Sign In'}
         </button>
       </form>
-      <button
-        type="button"
-        onClick={onChangePassword}
-        className="mt-4 text-xs font-semibold text-slate-600 hover:text-slate-800"
-      >
-        Change password
-      </button>
+
+      <p className="mt-4 border-t border-slate-100 pt-3 text-[11px] leading-relaxed text-slate-500 dark:border-slate-800 dark:text-slate-400">
+        Changed your password on the gym portal? Sign in with the new password and it will sync automatically.
+      </p>
     </div>
   );
 }

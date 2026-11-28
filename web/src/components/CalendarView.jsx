@@ -1,10 +1,17 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { WEEKDAY_LABELS } from '../constants/calendar';
 import { bookingKey, lessonOccurrenceKey } from '../utils/booking';
-import { formatDay, formatShortDate, monthLabel, weekdayLabel } from '../utils/date';
-import { formatLocalDate, parseLocalDate } from '../utils/date.js';
+import {
+  formatDay,
+  formatLocalDate,
+  formatShortDate,
+  getTodayIsoLocal,
+  monthLabel,
+  parseLocalDate,
+  weekdayLabel,
+} from '../utils/date';
 
-// Calendar view that merges availability with the user's bookings.
+// Mobile-first compact calendar view that merges class availability with active user bookings.
 export default function CalendarView({
   days,
   meta,
@@ -17,7 +24,9 @@ export default function CalendarView({
 }) {
   const hasDays = Array.isArray(days) && days.length > 0;
   const [calendarFilter, setCalendarFilter] = useState('all');
+  const [activeMonthIdx, setActiveMonthIdx] = useState(0);
 
+  const todayIso = useMemo(() => getTodayIsoLocal(), []);
   const groupedDays = useMemo(() => (Array.isArray(days) ? days : []), [days]);
 
   const myBookingsLookup = useMemo(() => {
@@ -120,181 +129,333 @@ export default function CalendarView({
     return groups;
   }, [dateList]);
 
+  // Keep visible month synced with selectedDate when selectedDate changes.
+  useEffect(() => {
+    if (!selectedDate || !monthGroups.length) return;
+    const idx = monthGroups.findIndex((group) => group.dates.includes(selectedDate));
+    if (idx !== -1) {
+      setActiveMonthIdx(idx);
+    }
+  }, [selectedDate, monthGroups]);
+
+  const safeMonthIdx = monthGroups.length
+    ? Math.min(activeMonthIdx, monthGroups.length - 1)
+    : 0;
+  const activeGroup = monthGroups[safeMonthIdx] || null;
   const selectedItems = selectedDate ? visibleItemsByDate[selectedDate] || [] : [];
+  const canJumpToday = dateList.includes(todayIso) && selectedDate !== todayIso;
+
+  const calendarCells = useMemo(() => {
+    if (!activeGroup?.dates?.length) return [];
+    const firstDay = parseLocalDate(activeGroup.dates[0]);
+    const jsDay = firstDay.getDay();
+    const mondayIndex = (jsDay + 6) % 7;
+    const blanks = Array.from({ length: mondayIndex }, () => null);
+    return [...blanks, ...activeGroup.dates];
+  }, [activeGroup]);
 
   return (
-    <div className="rounded-md border border-slate-200 bg-white p-5 shadow-sm">
-      <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h2 className="text-lg font-semibold">Bookable calendar</h2>
-          <p className="text-sm text-slate-600">This month and next month at a glance.</p>
+    <div className="space-y-3">
+      {/* Compact top control bar */}
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+        <div className="inline-flex items-center rounded border border-slate-200/80 bg-slate-100 p-0.5 dark:border-slate-800 dark:bg-slate-800/80">
+          <button
+            type="button"
+            onClick={() => setCalendarFilter('all')}
+            className={`rounded-sm px-2.5 py-1 text-xs font-semibold transition ${
+              calendarFilter === 'all'
+                ? 'bg-white text-slate-900 shadow-sm dark:bg-slate-950 dark:text-white'
+                : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200'
+            }`}
+          >
+            All
+          </button>
+          <button
+            type="button"
+            onClick={() => setCalendarFilter('mine')}
+            className={`rounded-sm px-2.5 py-1 text-xs font-semibold transition ${
+              calendarFilter === 'mine'
+                ? 'bg-white text-slate-900 shadow-sm dark:bg-slate-950 dark:text-white'
+                : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200'
+            }`}
+          >
+            My bookings
+          </button>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="flex items-center gap-2 rounded-md border border-slate-200 bg-slate-100 px-2 py-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+
+        <div className="flex items-center gap-1.5">
+          {canJumpToday && (
             <button
               type="button"
-              onClick={() => setCalendarFilter('all')}
-              className={`rounded-md px-3 py-1 text-[11px] font-semibold ${
-                calendarFilter === 'all' ? 'bg-white text-slate-700 shadow' : 'text-slate-500'
-              }`}
+              onClick={() => onSelectDate(todayIso)}
+              className="rounded border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
             >
-              All
+              Today
             </button>
-            <button
-              type="button"
-              onClick={() => setCalendarFilter('mine')}
-              className={`rounded-md px-3 py-1 text-[11px] font-semibold ${
-                calendarFilter === 'mine' ? 'bg-white text-slate-700 shadow' : 'text-slate-500'
-              }`}
-            >
-              My bookings
-            </button>
-          </div>
+          )}
           <button
             type="button"
             onClick={onRefresh}
-            className="rounded-md border border-slate-300 bg-white px-3 py-1 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
+            aria-label="Refresh calendar"
+            className="inline-flex items-center gap-1.5 rounded border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
           >
-            Refresh calendar
+            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-3.5 w-3.5" aria-hidden="true">
+              <path d="M16.5 10a6.5 6.5 0 1 1-1.9-4.6M16.5 3.5v3.2h-3.2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            <span>Refresh</span>
           </button>
         </div>
       </div>
 
       {!hasDays && (
-        <div className="rounded-md border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+        <div className="rounded-md border border-slate-200 bg-white px-4 py-3 text-xs text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400">
           No upcoming lessons found.
         </div>
       )}
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
-        <div className="space-y-6">
-          {monthGroups.map((group) => {
-            const dates = group.dates;
-            const firstDay = new Date(`${dates[0]}T00:00:00`);
-            const jsDay = firstDay.getDay();
-            const mondayIndex = (jsDay + 6) % 7;
-            const blanks = Array.from({ length: mondayIndex }, () => null);
-            const calendarCells = [...blanks, ...dates];
-
-            return (
-              <div key={group.label} className="flex gap-4">
-                <div className="flex w-10 items-center justify-center">
-                  <div className="rotate-180 text-xs font-semibold uppercase tracking-widest text-slate-400 [writing-mode:vertical-rl]">
-                    {group.label}
-                  </div>
-                </div>
-                <div className="flex-1">
-                  <div className="grid grid-cols-7 gap-2 text-center text-xs font-semibold text-slate-500">
-                    {WEEKDAY_LABELS.map((label) => (
-                      <div key={`${group.label}-${label}`}>{label}</div>
+      {/* Side-by-side on desktop, compact stacked single-month + immediate lesson list on mobile */}
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-[330px_minmax(0,1fr)] lg:items-start">
+        {/* Month card */}
+        {activeGroup && (
+          <div className="rounded-md border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+            {/* Month switcher */}
+            <div className="mb-2.5 flex items-center justify-between gap-1">
+              {monthGroups.length > 1 ? (
+                <div className="flex w-full items-center justify-between gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setActiveMonthIdx((idx) => Math.max(0, idx - 1))}
+                    disabled={safeMonthIdx === 0}
+                    aria-label="Previous month"
+                    className="inline-flex h-7 w-7 items-center justify-center rounded border border-slate-200 text-slate-600 transition hover:bg-slate-100 disabled:opacity-35 dark:border-slate-800 dark:text-slate-300 dark:hover:bg-slate-800"
+                  >
+                    ‹
+                  </button>
+                  <div className="flex items-center gap-1">
+                    {monthGroups.map((group, idx) => (
+                      <button
+                        key={group.label}
+                        type="button"
+                        onClick={() => setActiveMonthIdx(idx)}
+                        className={`rounded px-2.5 py-1 text-xs font-semibold transition ${
+                          idx === safeMonthIdx
+                            ? 'bg-brand/10 text-brand dark:bg-brand-light/20 dark:text-brand-light'
+                            : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'
+                        }`}
+                      >
+                        {group.label}
+                      </button>
                     ))}
                   </div>
-                  <div className="mt-2 grid grid-cols-7 gap-2">
-                    {calendarCells.map((date, index) => {
-                      if (!date) {
-                        return (
-                          <div
-                            key={`empty-${group.label}-${index}`}
-                            className="h-14 rounded-md border border-transparent"
-                          />
-                        );
-                      }
-                      const items = visibleItemsByDate[date] || [];
-                      const booked = items.some((item) => item.isUserPresent);
-                      const waitingListItem = items.find((item) => Number(item.waitingListPosition) > 0);
-                      const hasWaitingList = Boolean(waitingListItem);
-                      const hasItems = items.length > 0;
-                      const isSelected = selectedDate === date;
-                      return (
-                        <button
-                          key={date}
-                          type="button"
-                          onClick={() => onSelectDate(date)}
-                          className={`h-14 rounded-md border px-2 py-2 text-xs font-medium transition ${
-                            isSelected
-                              ? 'border-brand bg-brand text-white'
-                              : hasItems
-                                ? 'border-slate-200 bg-white text-slate-700 hover:border-slate-400'
-                                : 'border-slate-200 bg-slate-100 text-slate-400'
-                          }`}
-                        >
-                          <div className="flex h-full flex-col items-center justify-center gap-1 text-center leading-none">
-                            <div className="text-[12px] font-semibold">{formatDay(date)}</div>
-                            <div className="flex flex-col items-center gap-1 text-[9px] font-semibold">
-                              {booked && <span className="text-success">Booked</span>}
-                              {hasWaitingList ? (
-                                <span className="text-warning">
-                                  {waitingListItem ? `WL #${waitingListItem.waitingListPosition}` : 'WL'}
-                                </span>
-                              ) : null}
-                            </div>
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setActiveMonthIdx((idx) => Math.min(monthGroups.length - 1, idx + 1))}
+                    disabled={safeMonthIdx >= monthGroups.length - 1}
+                    aria-label="Next month"
+                    className="inline-flex h-7 w-7 items-center justify-center rounded border border-slate-200 text-slate-600 transition hover:bg-slate-100 disabled:opacity-35 dark:border-slate-800 dark:text-slate-300 dark:hover:bg-slate-800"
+                  >
+                    ›
+                  </button>
                 </div>
-              </div>
-            );
-          })}
-        </div>
+              ) : (
+                <div className="px-1 text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                  {activeGroup.label}
+                </div>
+              )}
+            </div>
 
-        <div className="rounded-md border border-slate-200 bg-slate-50/60 p-4">
-          <div className="mb-3 text-sm font-semibold text-slate-700">
-            {selectedDate ? `${formatShortDate(selectedDate)} - ${weekdayLabel(selectedDate)}` : 'Select a date'}
+            {/* Weekday header */}
+            <div className="grid grid-cols-7 gap-1 text-center text-[11px] font-semibold text-slate-400 dark:text-slate-500">
+              {WEEKDAY_LABELS.map((label) => (
+                <div key={label} className="py-0.5">
+                  {label}
+                </div>
+              ))}
+            </div>
+
+            {/* Compact calendar grid */}
+            <div className="mt-1 grid grid-cols-7 gap-1">
+              {calendarCells.map((date, index) => {
+                if (!date) {
+                  return <div key={`empty-${index}`} className="h-10 sm:h-11" />;
+                }
+                const items = visibleItemsByDate[date] || [];
+                const booked = items.some((item) => item.isUserPresent);
+                const waitingListItem = items.find((item) => Number(item.waitingListPosition) > 0);
+                const hasWaitingList = Boolean(waitingListItem);
+                const hasItems = items.length > 0;
+                const isSelected = selectedDate === date;
+                const isToday = todayIso === date;
+
+                return (
+                  <button
+                    key={date}
+                    type="button"
+                    onClick={() => onSelectDate(date)}
+                    className={`relative flex h-10 flex-col items-center justify-center rounded border text-xs font-semibold transition sm:h-11 ${
+                      isSelected
+                        ? 'border-brand bg-brand text-white shadow-sm'
+                        : hasItems
+                          ? 'border-slate-200/80 bg-white text-slate-800 hover:border-brand/50 dark:border-slate-800 dark:bg-slate-950/60 dark:text-slate-200 dark:hover:border-brand-light/50'
+                          : 'border-transparent bg-slate-100/70 text-slate-400 dark:bg-slate-900/40 dark:text-slate-600'
+                    } ${isToday && !isSelected ? 'ring-1 ring-brand dark:ring-brand-light' : ''}`}
+                  >
+                    <span className="leading-none">{formatDay(date)}</span>
+                    <span className="mt-1 flex h-2 items-center gap-1">
+                      {booked && (
+                        <span
+                          title="Booked"
+                          className={`h-1.5 w-1.5 rounded-full ${
+                            isSelected ? 'bg-white' : 'bg-emerald-500'
+                          }`}
+                        />
+                      )}
+                      {hasWaitingList && (
+                        <span
+                          title={`WL #${waitingListItem.waitingListPosition}`}
+                          className={`h-1.5 w-1.5 rounded-full ${
+                            isSelected ? 'bg-amber-200' : 'bg-amber-500'
+                          }`}
+                        />
+                      )}
+                      {!booked && !hasWaitingList && hasItems && (
+                        <span
+                          className={`h-1 w-1 rounded-full ${
+                            isSelected ? 'bg-white/70' : 'bg-slate-300 dark:bg-slate-600'
+                          }`}
+                        />
+                      )}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Compact legend */}
+            <div className="mt-2.5 flex items-center justify-center gap-3 border-t border-slate-100 pt-2 text-[10px] font-medium text-slate-500 dark:border-slate-800 dark:text-slate-400">
+              <span className="inline-flex items-center gap-1">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                Booked
+              </span>
+              <span className="inline-flex items-center gap-1">
+                <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                Waitlist
+              </span>
+              <span className="inline-flex items-center gap-1">
+                <span className="h-1.5 w-1.5 rounded-full bg-slate-300 dark:bg-slate-600" />
+                Available
+              </span>
+            </div>
           </div>
-          <div className="space-y-2">
-            {selectedItems.map((item) => (
-              <div
-                key={`${item.idLesson}-${item.startTime}`}
-                className="flex flex-col gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm md:flex-row md:items-center md:justify-between"
-              >
-                <div>
-                  <div className="font-semibold text-slate-800">{item.service}</div>
-                  <div className="text-xs text-slate-500">
-                    {item.category} - {item.startTime}-{item.endTime}
+        )}
+
+        {/* Selected day lessons panel */}
+        <div className="rounded-md border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-4">
+          <div className="mb-2.5 flex items-center justify-between gap-2 border-b border-slate-100 pb-2 dark:border-slate-800">
+            <div className="text-xs font-bold text-slate-800 dark:text-slate-100 sm:text-sm">
+              {selectedDate
+                ? `${weekdayLabel(selectedDate)} · ${formatShortDate(selectedDate)}`
+                : 'Select a date'}
+            </div>
+            {selectedDate && (
+              <span className="rounded-sm bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                {selectedItems.length} {selectedItems.length === 1 ? 'class' : 'classes'}
+              </span>
+            )}
+          </div>
+
+          <div className="space-y-1.5">
+            {selectedItems.map((item) => {
+              const isBooked = Boolean(item.isUserPresent);
+              const wlPos = Number(item.waitingListPosition ?? 0);
+              const isWaitlisted = wlPos > 0;
+              const isLocked = Number(item.isLocked ?? 0) === 1;
+              const seats = Number(item.availablePlaces ?? 0);
+
+              const accentBar = isBooked
+                ? 'bg-emerald-500'
+                : isWaitlisted
+                  ? 'bg-amber-500'
+                  : 'bg-slate-200 dark:bg-slate-700';
+
+              return (
+                <div
+                  key={`${item.idLesson}-${item.startTime}`}
+                  className="flex items-center justify-between gap-2 rounded border border-slate-200/80 bg-slate-50/50 px-2.5 py-2 transition hover:border-slate-300 dark:border-slate-800 dark:bg-slate-950/50 dark:hover:border-slate-700"
+                >
+                  <div className="flex min-w-0 items-center gap-2.5">
+                    <span className={`h-8 w-1 shrink-0 rounded-sm ${accentBar}`} aria-hidden="true" />
+                    <div className="w-11 shrink-0 tabular-nums leading-tight">
+                      <div className="text-xs font-bold text-slate-800 dark:text-slate-100">
+                        {item.startTime}
+                      </div>
+                      <div className="text-[10px] font-medium text-slate-400 dark:text-slate-500">
+                        {item.endTime}
+                      </div>
+                    </div>
+                    <div className="min-w-0">
+                      <div className="truncate text-xs font-semibold text-slate-900 dark:text-slate-100 sm:text-sm">
+                        {item.service}
+                      </div>
+                      <div className="flex items-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400">
+                        <span>{seats > 0 ? `${seats} seats` : 'Full'}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    {isBooked && (
+                      <span className="rounded-sm bg-emerald-500/15 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300">
+                        Booked
+                      </span>
+                    )}
+                    {isWaitlisted && (
+                      <span className="rounded-sm bg-amber-500/15 px-2 py-0.5 text-[11px] font-semibold text-amber-700 dark:text-amber-300">
+                        {`WL #${wlPos}`}
+                      </span>
+                    )}
+
+                    {item.bookingId ? (
+                      <button
+                        type="button"
+                        onClick={() => onCancel(item)}
+                        className="rounded border border-rose-200 bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-700 transition hover:bg-rose-100 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-300 dark:hover:bg-rose-500/20"
+                      >
+                        Cancel
+                      </button>
+                    ) : !isBooked && !isWaitlisted ? (
+                      isLocked ? (
+                        <button
+                          type="button"
+                          disabled
+                          className="cursor-not-allowed rounded border border-slate-200 bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-400 dark:border-slate-800 dark:bg-slate-800/70 dark:text-slate-500"
+                        >
+                          Closed
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => onBook(item)}
+                          className="rounded bg-brand px-2.5 py-1 text-xs font-semibold text-white shadow-sm transition hover:bg-brand-dark"
+                        >
+                          {seats > 0 ? 'Book' : 'Join waitlist'}
+                        </button>
+                      )
+                    ) : null}
                   </div>
                 </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="rounded-md bg-slate-100 px-2 py-1 text-xs text-slate-600">
-                    Seats: {item.availablePlaces}
-                  </span>
-                  {item.isUserPresent ? (
-                    <span className="rounded-md bg-success-soft px-2 py-1 text-xs font-semibold text-success-deep">
-                      Booked
-                    </span>
-                  ) : null}
-                  {item.waitingListPosition > 0 ? (
-                    <span className="rounded-md bg-warning-soft px-2 py-1 text-xs font-semibold text-warning-deep">
-                      {`WL #${item.waitingListPosition}`}
-                    </span>
-                  ) : null}
-                  {item.bookingId ? (
-                    <button
-                      type="button"
-                      onClick={() => onCancel(item)}
-                      className="rounded-md border border-rose-200 bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-100"
-                    >
-                      Cancel
-                    </button>
-                  ) : null}
-                  {!item.isUserPresent && item.waitingListPosition <= 0 && (
-                    <button
-                      type="button"
-                      onClick={() => onBook(item)}
-                      className="rounded-md bg-brand px-3 py-1 text-xs font-semibold text-white shadow-sm hover:bg-brand-dark"
-                    >
-                      {item.availablePlaces > 0 ? 'Book' : 'Join waitlist'}
-                    </button>
-                  )}
-                </div>
-              </div>
-            ))}
+              );
+            })}
+
             {selectedDate && selectedItems.length === 0 && (
-              <div className="text-sm text-slate-500">No courses available.</div>
+              <div className="py-6 text-center text-xs text-slate-500 dark:text-slate-400">
+                No courses available.
+              </div>
             )}
             {!selectedDate && (
-              <div className="text-sm text-slate-500">Pick a day to see the lessons.</div>
+              <div className="py-6 text-center text-xs text-slate-500 dark:text-slate-400">
+                Pick a day to see the lessons.
+              </div>
             )}
           </div>
         </div>
