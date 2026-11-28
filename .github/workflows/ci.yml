@@ -6,17 +6,26 @@ on:
   pull_request:
     branches: ["main"]
 
+permissions:
+  contents: read
+
 jobs:
   deno-tests:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Set up Deno
-        uses: denoland/setup-deno@v2
+        uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
         with:
           deno-version: v2.x
+
+      - name: Lint Edge Functions
+        run: deno lint supabase/functions/
+
+      - name: Type-check Edge Function entrypoints
+        run: deno check supabase/functions/*/index.ts
 
       - name: Run Edge Function unit tests
         run: deno test --allow-env supabase/functions/_tests/
@@ -25,10 +34,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: "22"
           cache: "npm"
@@ -37,6 +46,10 @@ jobs:
       - name: Install frontend dependencies
         working-directory: web
         run: npm install --no-audit --no-fund
+
+      - name: Audit production dependencies
+        working-directory: web
+        run: npm audit --omit=dev --audit-level=high
 
       - name: Lint frontend
         working-directory: web

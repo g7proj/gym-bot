@@ -1,13 +1,11 @@
-import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { requireAuth } from '../_shared/auth.ts';
+import { createSupabaseAdmin, requireAuth } from '../_shared/auth.ts';
 import { getCorsHeaders, handleOptions, jsonResponse } from '../_shared/http.ts';
 import { generateLinkToken, resolveBotUsername } from '../_shared/telegram.ts';
 
 const LINK_TTL_SECONDS = 900; // 15 minutes
 
 // Create a single-use Telegram deep link (`t.me/<bot>?start=<token>`) or disconnect alerts.
-serve(async (req) => {
+Deno.serve(async (req: Request) => {
   const corsHeaders = getCorsHeaders(req);
   if (req.method === 'OPTIONS') {
     return handleOptions(corsHeaders);
@@ -18,8 +16,8 @@ serve(async (req) => {
     const supabaseServiceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
 
     const authResult = await requireAuth(req, supabaseUrl, supabaseServiceRoleKey, corsHeaders);
-    if (authResult.errorResponse) {
-      return authResult.errorResponse;
+    if (authResult.errorResponse || !authResult.user) {
+      return authResult.errorResponse!;
     }
     const user = authResult.user;
 
@@ -32,9 +30,7 @@ serve(async (req) => {
       }
     }
 
-    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceRoleKey, {
-      auth: { autoRefreshToken: false, persistSession: false },
-    });
+    const supabaseAdmin = createSupabaseAdmin(supabaseUrl, supabaseServiceRoleKey);
 
     if (action === 'disconnect') {
       await Promise.all([
@@ -98,7 +94,7 @@ serve(async (req) => {
       200,
       corsHeaders,
     );
-  } catch (err) {
+  } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Unexpected error';
     return jsonResponse({ error: message }, 500, corsHeaders);
   }

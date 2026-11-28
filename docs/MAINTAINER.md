@@ -74,10 +74,12 @@ The SPA runs at `http://localhost:3000`.
 
 ## 3. Local Testing
 
-### 3.1 Edge Function Unit Tests (Deno)
+### 3.1 Edge Function Lint, Type-Check & Unit Tests (Deno 2)
 
 ```powershell
 cd C:\projects\gym-bot
+deno lint supabase/functions/
+Get-ChildItem supabase/functions/*/index.ts | ForEach-Object { deno check $_.FullName }
 deno test --allow-env supabase/functions/_tests/
 ```
 
@@ -258,6 +260,20 @@ Get-ChildItem supabase\functions -Directory |
 1. Generate a new random secret string.
 2. Update `CRON_SECRET` in **Supabase Edge Function Secrets**, **Supabase Vault** (`gym_cron_secret`), and **GitHub Repository Secrets**.
 3. Trigger a manual `Daily Gym Booking` dry-run in GitHub Actions to verify `200 OK`.
+
+### 5.4 Dependency Updates & Supply-Chain Policy
+
+Automated dependency maintenance is configured in `.github/dependabot.yml` with explicit supply-chain safeguards:
+
+- **No auto-merge**: Dependabot only opens pull requests and triggers unprivileged CI (`ci.yml`); every update requires manual human review before merging.
+- **7-day release cooldown (`cooldown.default-days: 7`)**: routine version updates wait at least 7 days after upstream publication before Dependabot proposes them. Most compromised npm packages or hijacked GitHub Actions releases are detected and yanked within 24–72 hours; urgent GitHub Security Advisories (CVEs) still open immediately.
+- **Monthly grouped cadence (`interval: "monthly"`)**: minor and patch updates for `/web` (`npm`) and workflow actions (`github-actions`) are grouped into at most one monthly PR per ecosystem to prevent alert fatigue.
+- **Immutable SHA pinning on GitHub Actions**: every `uses:` step in `.github/workflows/*.yml` is pinned to a full 40-character commit SHA (with a `# vX.Y.Z` comment) rather than a mutable tag like `@v4`, protecting workflows that handle `SUPABASE_ACCESS_TOKEN`, `SUPABASE_DB_PASSWORD`, and `CRON_SECRET` against tag tampering.
+- **Least-privilege `GITHUB_TOKEN`**: all workflows declare explicit minimal `permissions` (`contents: read` everywhere except `pages.yml`, which adds `pages: write` and `id-token: write`).
+
+When reviewing a Dependabot PR:
+1. Confirm both `deno-tests` and `web-build` (including `npm audit --omit=dev --audit-level=high`) are green.
+2. Inspect `package-lock.json` or workflow SHA diffs for unexpected new transitive dependencies or unfamiliar maintainers before merging.
 
 ---
 

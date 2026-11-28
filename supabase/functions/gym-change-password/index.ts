@@ -1,13 +1,11 @@
-import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createSupabaseAdmin, createSupabaseUserClient, requireAuth } from '../_shared/auth.ts';
 import { encryptString } from '../_shared/crypto.ts';
-import { requireAuth } from '../_shared/auth.ts';
 import { changePassword, gymLogin } from '../_shared/gymClient.ts';
 import { invalidateGymToken } from '../_shared/gymSession.ts';
-import { getCorsHeaders, handleOptions } from '../_shared/http.ts';
+import { getCorsHeaders, handleOptions, jsonResponse } from '../_shared/http.ts';
 
 // Change the gym password and keep Supabase credentials in sync.
-serve(async (req) => {
+Deno.serve(async (req: Request) => {
   const corsHeaders = getCorsHeaders(req);
   if (req.method === 'OPTIONS') {
     return handleOptions(corsHeaders);
@@ -19,13 +17,9 @@ serve(async (req) => {
     const supabaseServiceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
     const authHeader = req.headers.get('authorization') || '';
 
-    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-      global: { headers: { Authorization: authHeader } },
-    });
-
     const authResult = await requireAuth(req, supabaseUrl, supabaseServiceRoleKey, corsHeaders);
-    if (authResult.errorResponse) {
-      return authResult.errorResponse;
+    if (authResult.errorResponse || !authResult.user) {
+      return authResult.errorResponse!;
     }
     const user = authResult.user;
 
@@ -34,12 +28,10 @@ serve(async (req) => {
     const newPassword = String(body?.newPassword || '');
 
     if (!oldPassword || !newPassword) {
-      return new Response(JSON.stringify({ error: 'Missing password fields' }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      return jsonResponse({ error: 'Missing password fields' }, 400, corsHeaders);
     }
 
+    const supabase = createSupabaseUserClient(supabaseUrl, supabaseAnonKey, authHeader);
     const { data: userRow, error: userRowError } = await supabase
       .from('users')
       .select('username, password_encrypted')
@@ -47,10 +39,7 @@ serve(async (req) => {
       .single();
 
     if (userRowError || !userRow?.password_encrypted) {
-      return new Response(JSON.stringify({ error: 'User credentials not found' }), {
-        status: 404,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      return jsonResponse({ error: 'User credentials not found' }, 404, corsHeaders);
     }
 
     // Validate old password by logging in, then call change password.
@@ -58,7 +47,7 @@ serve(async (req) => {
     await changePassword(gymToken, oldPassword, newPassword);
 
     const encrypted = await encryptString(newPassword);
-    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceRoleKey);
+    const supabaseAdmin = createSupabaseAdmin(supabaseUrl, supabaseServiceRoleKey);
 
     const { error: authUpdateError } = await supabaseAdmin.auth.admin.updateUserById(
       user.id,
@@ -66,10 +55,7 @@ serve(async (req) => {
     );
 
     if (authUpdateError) {
-      return new Response(JSON.stringify({ error: authUpdateError.message }), {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      return jsonResponse({ error: authUpdateError.message }, 500, corsHeaders);
     }
 
     const { error: updateError } = await supabaseAdmin
@@ -78,22 +64,14 @@ serve(async (req) => {
       .eq('id', user.id);
 
     if (updateError) {
-      return new Response(JSON.stringify({ error: updateError.message }), {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      return jsonResponse({ error: updateError.message }, 500, corsHeaders);
     }
 
     await invalidateGymToken(supabaseAdmin, user.id);
 
-    return new Response(JSON.stringify({ success: true }), {
-      status: 200,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
-  } catch (err) {
-    return new Response(JSON.stringify({ error: err?.message || 'Unexpected error' }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
+    return jsonResponse({ success: true }, 200, corsHeaders);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Unexpected error';
+    return jsonResponse({ error: message }, 500, corsHeaders);
   }
 });

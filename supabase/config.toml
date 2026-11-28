@@ -384,6 +384,9 @@ verify_jwt = false
 [functions.gym-cancel]
 verify_jwt = false
 
+[functions.gym-change-password]
+verify_jwt = false
+
 [functions.gym-courses]
 verify_jwt = false
 

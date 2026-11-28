@@ -1,10 +1,9 @@
-import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createSupabaseAdmin } from '../_shared/auth.ts';
 import { runAutoBooking, verifyCronSecret } from '../_shared/autoBook.ts';
 import { getCorsHeaders, handleOptions, jsonResponse } from '../_shared/http.ts';
 
 // Scheduled machine-to-machine endpoint that books preferred lesson slots for all users.
-serve(async (req) => {
+Deno.serve(async (req: Request) => {
   const corsHeaders = getCorsHeaders(req);
   if (req.method === 'OPTIONS') {
     return handleOptions(corsHeaders);
@@ -37,13 +36,10 @@ serve(async (req) => {
       forceTime = Boolean(parsed?.forceTime);
     }
 
-    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceRoleKey, {
-      auth: { autoRefreshToken: false, persistSession: false },
-    });
-
+    const supabaseAdmin = createSupabaseAdmin(supabaseUrl, supabaseServiceRoleKey);
     const summary = await runAutoBooking(supabaseAdmin, { dryRun, forceTime });
     return jsonResponse({ success: true, ...summary }, 200, corsHeaders);
-  } catch (err) {
+  } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Unexpected error';
     return jsonResponse({ error: message }, 500, corsHeaders);
   }

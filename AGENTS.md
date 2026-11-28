@@ -45,14 +45,16 @@ Instructions for AI coding agents working on the **gym-bot** repository.
 - **Secrets**: Never log or print `ENCRYPTION_KEY`, `CRON_SECRET`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`, plaintext passwords, encrypted payloads/IVs, `Authorization` headers, or full URLs for `/security/webauthenticate`, `/security/changepassword`, and Telegram Bot API calls.
 - **Environment files**: Never commit `.env`, `.env.local`, `supabase/.env`, `supabase/functions/.env`, or `web/.env.development`. Update `.env.example` / `web/.env.example` when introducing new variables.
 - **CORS**: All Edge Functions must use `getCorsHeaders(req)` and `handleOptions(corsHeaders)` from `supabase/functions/_shared/http.ts`. Never reintroduce hardcoded `'Access-Control-Allow-Origin': '*'`.
+- **GitHub Actions supply chain**: Pin all `uses:` action references in `.github/workflows/*.yml` to full 40-character commit SHAs with a `# vX.Y.Z` version comment, and declare explicit minimal `permissions` on every workflow.
 - **API documentation**: Whenever an Edge Function endpoint or InfoYou API call is added or modified, update the corresponding OpenAPI spec in `docs/openapi/`.
 
 ## Verification Before Finishing Changes
 
 Always run the relevant checks after editing code:
 
-1. **Edge Function unit tests (Deno)**:
+1. **Edge Function lint & unit tests (Deno)**:
    ```powershell
+   deno lint supabase/functions/
    deno test --allow-env supabase/functions/_tests/
    ```
 2. **Frontend lint, unit tests & build** (when touching `web/`):

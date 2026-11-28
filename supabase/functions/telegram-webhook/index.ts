@@ -1,13 +1,13 @@
-import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createSupabaseAdmin } from '../_shared/auth.ts';
 import { getCorsHeaders, handleOptions, jsonResponse } from '../_shared/http.ts';
 import {
   processTelegramWebhookUpdate,
+  type TelegramUpdate,
   verifyTelegramWebhookSecret,
 } from '../_shared/telegram.ts';
 
 // Webhook receiver invoked by Telegram servers when a user taps Start (`/start <token>`).
-serve(async (req) => {
+Deno.serve(async (req: Request) => {
   const corsHeaders = getCorsHeaders(req);
   if (req.method === 'OPTIONS') {
     return handleOptions(corsHeaders);
@@ -36,15 +36,12 @@ serve(async (req) => {
       return jsonResponse({ error: 'Supabase configuration missing' }, 500, corsHeaders);
     }
 
-    const update = await req.json();
-    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceRoleKey, {
-      auth: { autoRefreshToken: false, persistSession: false },
-    });
+    const update = (await req.json()) as TelegramUpdate;
+    const supabaseAdmin = createSupabaseAdmin(supabaseUrl, supabaseServiceRoleKey);
 
     const result = await processTelegramWebhookUpdate(supabaseAdmin, update, botToken);
     return jsonResponse({ ok: true, ...result }, 200, corsHeaders);
-  } catch (_err) {
-    // Return 200 on malformed update bodies after auth check? Keep 500 only on genuine failures.
+  } catch (_err: unknown) {
     return jsonResponse({ error: 'Webhook processing error' }, 500, corsHeaders);
   }
 });

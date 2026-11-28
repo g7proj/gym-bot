@@ -100,7 +100,7 @@ export async function listWithMine(
   endDate: string,
   timeStart: string,
   timeEnd: string,
-): Promise<any> {
+): Promise<Record<string, unknown>> {
   const appToken = getAppToken();
   const response = await fetchWithTimeout(
     `${BASE_URL}/webbooking/listwithmine`,
@@ -139,7 +139,7 @@ export async function listWithMine(
 }
 
 // Fetch all current bookings for the authenticated user.
-export async function myBookings(token: string): Promise<any> {
+export async function myBookings(token: string): Promise<Record<string, unknown>> {
   const appToken = getAppToken();
   const url = new URL(`${BASE_URL}/webbooking/mybooks`);
   url.searchParams.set('companyID', String(COMPANY_ID));
@@ -177,7 +177,7 @@ async function postBooking(
   token: string,
   endpoint: string,
   payload: Record<string, unknown>,
-): Promise<any> {
+): Promise<Record<string, unknown>> {
   const appToken = getAppToken();
   const response = await fetchWithTimeout(
     `${BASE_URL}/webbooking/${endpoint}`,
@@ -209,22 +209,34 @@ async function postBooking(
 }
 
 // Confirm a booking with the gym API.
-export async function bookLesson(token: string, payload: Record<string, unknown>): Promise<any> {
+export function bookLesson(
+  token: string,
+  payload: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
   return postBooking(token, 'book', payload);
 }
 
 // Add the user to the waitlist when no places are available.
-export async function addWait(token: string, payload: Record<string, unknown>): Promise<any> {
+export function addWait(
+  token: string,
+  payload: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
   return postBooking(token, 'AddWait', payload);
 }
 
 // Cancel a confirmed booking.
-export async function cancelBooking(token: string, payload: Record<string, unknown>): Promise<any> {
+export function cancelBooking(
+  token: string,
+  payload: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
   return postBooking(token, 'cancel', payload);
 }
 
 // Remove the user from the waitlist.
-export async function removeWait(token: string, payload: Record<string, unknown>): Promise<any> {
+export function removeWait(
+  token: string,
+  payload: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
   return postBooking(token, 'RemoveWait', payload);
 }
 
@@ -233,7 +245,7 @@ export async function changePassword(
   token: string,
   oldPassword: string,
   newPassword: string,
-): Promise<any> {
+): Promise<Record<string, unknown>> {
   const appToken = getAppToken();
   const url = new URL(`${BASE_URL}/security/changepassword`);
   url.searchParams.set('oldpwd', oldPassword);
