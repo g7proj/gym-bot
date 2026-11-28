@@ -8,7 +8,7 @@ Instructions for AI coding agents working on the **gym-bot** repository.
 
 ### Repository Map
 
-- `web/` — React 18 + Tailwind CSS SPA (deployed to GitHub Pages via `.github/workflows/pages.yml`), with Jest unit tests (`*.test.js`, `*.test.jsx`).
+- `web/` — React 19 + Vite + Tailwind CSS v4 SPA (deployed to GitHub Pages via `.github/workflows/pages.yml`), with Vitest unit tests (`*.test.js`, `*.test.jsx`) and ESLint 9 flat config.
 - `supabase/functions/` — Deno Edge Functions acting as an authenticated proxy and automation engine for the gym portal:
   - `_shared/auth.ts` — server-side Supabase JWT verification (`requireAuth` via `auth.getUser`).
   - `_shared/http.ts` — origin-restricted CORS and JSON response helpers.
@@ -36,8 +36,8 @@ Instructions for AI coding agents working on the **gym-bot** repository.
 4. **Waiting list field name**: The InfoYou API returns `UserPositionWaitingList` (not `WaitingListPosition`). Always check `UserPositionWaitingList` (with optional fallback) before booking to prevent duplicate bookings.
 5. **Distributed locking & retry semantics**: `autoBook.ts` acquires a per-user daily lock via `acquire_booking_lock`. If any booking call returns `Successful: false` or throws an error, mark the lock `failed` (with 5-minute retry TTL), never `completed`. In `dryRun` mode, never acquire/modify locks and never call `bookLesson`.
 6. **Timezone consistency**: Business dates, the `>= 07:00` time gate, and booking windows (`today` .. `today + 19`) must be computed in `Europe/Rome` via `Intl.DateTimeFormat`, not host local/UTC time.
-7. **Atomic frontend preference saves**: In `web/src/App.js`, upsert new preference rows before deleting removed rows so partial failures never wipe a user's preferences.
-8. **No redundant calendar refetches**: `loadCalendar` in `web/src/App.js` must not depend on `selectedDate` in `useCallback`; date selection must remain purely client-side.
+7. **Atomic frontend preference saves**: In `web/src/App.jsx`, upsert new preference rows before deleting removed rows so partial failures never wipe a user's preferences.
+8. **No redundant calendar refetches**: `loadCalendar` in `web/src/App.jsx` must not depend on `selectedDate` in `useCallback`; date selection must remain purely client-side.
 
 ## Security & Coding Standards
 
@@ -55,11 +55,11 @@ Always run the relevant checks after editing code:
    ```powershell
    deno test --allow-env supabase/functions/_tests/
    ```
-2. **Frontend unit tests & build** (when touching `web/`):
+2. **Frontend lint, unit tests & build** (when touching `web/`):
    ```powershell
    cd web
-   $env:CI = "true"
-   npm test -- --watchAll=false
+   npm run lint
+   npm test
    npm run build
    ```
 3. **Git cleanliness**: Verify `git status` contains no untracked secret files or temporary debug scripts.

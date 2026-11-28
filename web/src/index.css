@@ -1,6 +1,16 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --color-brand: #4f46e5;
+  --color-brand-dark: #4338ca;
+  --color-brand-light: #818cf8;
+  --color-accent: #6366f1;
+  --color-accent-dark: #4f46e5;
+  --radius-sm: 0.125rem;
+  --font-sans: "Sora", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+}
 
 @layer base {
   html {
@@ -8,14 +18,20 @@
   }
 
   body {
-    @apply m-0 bg-slate-50 font-sans text-slate-900 antialiased transition-colors duration-150 dark:bg-slate-950 dark:text-slate-100;
+    margin: 0;
+    @apply bg-slate-50 font-sans text-slate-900 antialiased transition-colors duration-150 dark:bg-slate-950 dark:text-slate-100;
+  }
+
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
   }
 }
 
-/* Hide scrollbars on compact horizontal mobile pill strips while preserving touch scroll */
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }
+
 .no-scrollbar {
   -ms-overflow-style: none;
   scrollbar-width: none;

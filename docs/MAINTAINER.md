@@ -8,7 +8,7 @@ This guide covers environment setup, local testing, production deployment, secur
 
 | Tool | Recommended Version | Purpose |
 | --- | --- | --- |
-| Node.js / npm | Node 20+ | React frontend (`web/`) and Jest unit tests |
+| Node.js / npm | Node 22 LTS (or 20+) | React 19 + Vite frontend (`web/`) and Vitest unit tests |
 | Docker Desktop | Latest | Local Supabase stack (Postgres, GoTrue, Edge Runtime, Studio) |
 | Supabase CLI | 2.84.x | Local stack management, DB migrations, Edge Functions deploy |
 | Deno | 2.x | Edge Functions unit tests and type-checking |
@@ -87,12 +87,12 @@ Covers:
 - Constant-time `CRON_SECRET` verification (`verifyCronSecret`).
 - `Europe/Rome` 20-day booking window, time gate (`>= 07:00`), exact course/time slot matching, `UserPositionWaitingList` checks, lock failure/retry semantics, and `dryRun` isolation.
 
-### 3.2 Frontend Unit Tests & Production Build
+### 3.2 Frontend Lint, Unit Tests & Production Build
 
 ```powershell
 cd C:\projects\gym-bot\web
-$env:CI = "true"
-npm test -- --watchAll=false
+npm run lint
+npm test
 npm run build
 ```
 

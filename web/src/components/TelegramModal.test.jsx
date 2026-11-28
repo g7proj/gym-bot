@@ -1,5 +1,6 @@
-import React, { act } from 'react';
+import { act } from 'react';
 import { createRoot } from 'react-dom/client';
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import TelegramModal from './TelegramModal';
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
@@ -22,20 +23,20 @@ describe('TelegramModal', () => {
   });
 
   test('renders unlinked flow, generates deep link, and exposes native Telegram anchor', () => {
-    const onGenerateLink = jest.fn();
-    const onCheckStatus = jest.fn();
+    const onGenerateLink = vi.fn();
+    const onCheckStatus = vi.fn();
 
     act(() => {
       root.render(
         <TelegramModal
           open
-          onClose={jest.fn()}
+          onClose={vi.fn()}
           connection={null}
           deepLinkUrl=""
           loading={false}
           onGenerateLink={onGenerateLink}
           onCheckStatus={onCheckStatus}
-          onDisconnect={jest.fn()}
+          onDisconnect={vi.fn()}
         />,
       );
     });
@@ -55,13 +56,13 @@ describe('TelegramModal', () => {
       root.render(
         <TelegramModal
           open
-          onClose={jest.fn()}
+          onClose={vi.fn()}
           connection={null}
           deepLinkUrl="https://t.me/gymbot_test_bot?start=abc123token"
           loading={false}
           onGenerateLink={onGenerateLink}
           onCheckStatus={onCheckStatus}
-          onDisconnect={jest.fn()}
+          onDisconnect={vi.fn()}
         />,
       );
     });
@@ -81,18 +82,18 @@ describe('TelegramModal', () => {
   });
 
   test('renders connected state with username and triggers disconnect', () => {
-    const onDisconnect = jest.fn();
+    const onDisconnect = vi.fn();
 
     act(() => {
       root.render(
         <TelegramModal
           open
-          onClose={jest.fn()}
+          onClose={vi.fn()}
           connection={{ telegramUsername: '@mario', enabled: true }}
           deepLinkUrl=""
           loading={false}
-          onGenerateLink={jest.fn()}
-          onCheckStatus={jest.fn()}
+          onGenerateLink={vi.fn()}
+          onCheckStatus={vi.fn()}
           onDisconnect={onDisconnect}
         />,
       );

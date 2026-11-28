@@ -1,5 +1,6 @@
-import React, { act } from 'react';
+import { act } from 'react';
 import { createRoot } from 'react-dom/client';
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import Dashboard from './Dashboard';
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
@@ -83,9 +84,9 @@ describe('Dashboard (Preferences)', () => {
           user={sampleUser}
           coursesByDay={sampleCoursesByDay}
           bookingRuns={bookingRuns}
-          onRefreshStatus={jest.fn()}
-          onRefreshCourses={jest.fn()}
-          onUpdatePreferences={jest.fn()}
+          onRefreshStatus={vi.fn()}
+          onRefreshCourses={vi.fn()}
+          onUpdatePreferences={vi.fn()}
           loading={false}
         />,
       );
@@ -128,7 +129,7 @@ describe('Dashboard (Preferences)', () => {
   });
 
   test('tracks dirty state, supports Reset, and submits updated slots', () => {
-    const onUpdatePreferences = jest.fn();
+    const onUpdatePreferences = vi.fn();
 
     act(() => {
       root.render(
@@ -136,8 +137,8 @@ describe('Dashboard (Preferences)', () => {
           user={sampleUser}
           coursesByDay={sampleCoursesByDay}
           bookingRuns={[]}
-          onRefreshStatus={jest.fn()}
-          onRefreshCourses={jest.fn()}
+          onRefreshStatus={vi.fn()}
+          onRefreshCourses={vi.fn()}
           onUpdatePreferences={onUpdatePreferences}
           loading={false}
         />,

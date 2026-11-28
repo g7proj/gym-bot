@@ -1,6 +1,6 @@
-# Frontend (React)
+# Frontend (React 19 + Vite + Tailwind CSS v4)
 
-React SPA for user login and preference management.
+Mobile-first React SPA for gym class booking and automated preference management.
 
 ## Environment Variables
 
@@ -11,29 +11,29 @@ web\.env.development
 web\.env.production
 ```
 
-Example contents:
+Example contents (`VITE_*` is recommended; `REACT_APP_*` remains supported for backward compatibility):
 
 ```dotenv
 # web\.env.development
-REACT_APP_SUPABASE_URL=https://YOUR-PROJECT.supabase.co
-REACT_APP_SUPABASE_ANON_KEY=YOUR_ANON_KEY
+VITE_SUPABASE_URL=http://127.0.0.1:54321
+VITE_SUPABASE_ANON_KEY=YOUR_LOCAL_PUBLISHABLE_OR_ANON_KEY
 ```
 
 ```dotenv
 # web\.env.production
-REACT_APP_SUPABASE_URL=https://YOUR-PROJECT.supabase.co
-REACT_APP_SUPABASE_ANON_KEY=YOUR_ANON_KEY
+VITE_SUPABASE_URL=https://YOUR-PROJECT.supabase.co
+VITE_SUPABASE_ANON_KEY=YOUR_ANON_KEY
 ```
 
-React Scripts will load the correct file automatically:
+Vite loads the matching file automatically:
 
-- `npm start` uses `.env.development`
-- `npm run build` uses `.env.production`
+- `npm start` / `npm run dev` uses `.env.development` (serves on `http://localhost:3000`)
+- `npm run build` uses `.env.production` (outputs to `web/build` with `/gym-bot/` base path)
 
-You can keep shared values in `web\.env`.
+## Commands
 
-## Setup
-
-1. Install Node.js and npm.
-2. Run `npm install`.
-3. Start the dev server with `npm start`.
+1. Install dependencies: `npm install`
+2. Start dev server: `npm start`
+3. Run ESLint: `npm run lint`
+4. Run unit tests (Vitest): `npm test`
+5. Build production bundle: `npm run build`
