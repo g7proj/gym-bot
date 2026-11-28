@@ -15,6 +15,12 @@ servers:
 tags:
   - name: Security
     description: Session authentication and password management
+  - name: User
+    description: General user status endpoints (reference/discovered, not yet consumed by Gym Bot)
+  - name: WebUser
+    description: Authenticated user profile and account endpoints (reference/discovered, not yet consumed by Gym Bot)
+  - name: WebEPurse
+    description: Electronic purse and movement history endpoints (reference/discovered, not yet consumed by Gym Bot)
   - name: WebBooking
     description: Services, schedule lookup, user bookings, and reservations
 
@@ -49,6 +55,10 @@ components:
       properties:
         Successful:
           type: boolean
+        Result:
+          type: string
+          nullable: true
+          example: "0"
         ErrorMessage:
           type: string
           nullable: true
@@ -226,6 +236,245 @@ components:
         IDDurata:
           type: integer
           default: 0
+
+    WebUserMeItem:
+      type: object
+      properties:
+        UserID:
+          type: integer
+          example: 12345
+        LastName:
+          type: string
+          example: Rossi
+        FirstName:
+          type: string
+          example: Mario
+        Street:
+          type: string
+          nullable: true
+        CivicNumber:
+          type: string
+          nullable: true
+        Province:
+          type: string
+          nullable: true
+        City:
+          type: string
+          nullable: true
+        ZipCode:
+          type: string
+          nullable: true
+        Country:
+          type: string
+          nullable: true
+        FiscalCode:
+          type: string
+          nullable: true
+        Phone1:
+          type: string
+          nullable: true
+        Phone2:
+          type: string
+          nullable: true
+        Mobile:
+          type: string
+          nullable: true
+        Email:
+          type: string
+          nullable: true
+        Gender:
+          type: string
+          nullable: true
+          example: M
+        BirthPlace:
+          type: string
+          nullable: true
+        BirthDate:
+          type: string
+          nullable: true
+          example: "1990-01-15T00:00:00"
+        BirthProvince:
+          type: string
+          nullable: true
+        BirthCountry:
+          type: string
+          nullable: true
+        Occupation:
+          type: string
+          nullable: true
+        Note:
+          type: string
+          nullable: true
+        Source:
+          type: string
+          nullable: true
+        WebLogin:
+          type: string
+          nullable: true
+        WebPassword:
+          type: string
+          nullable: true
+        ReceiptFiscalCode:
+          type: string
+          nullable: true
+        ReceiptName:
+          type: string
+          nullable: true
+        AllowPaper:
+          type: boolean
+        AllowEMail:
+          type: boolean
+        AllowSMS:
+          type: boolean
+        Custom1:
+          type: string
+          nullable: true
+        Custom2:
+          type: string
+          nullable: true
+        Custom3:
+          type: string
+          nullable: true
+        Custom4:
+          type: string
+          nullable: true
+        IDReferral:
+          type: integer
+          nullable: true
+        AgreeContract:
+          type: boolean
+          nullable: true
+        AgreeRule:
+          type: boolean
+          nullable: true
+        AgreePrivacy:
+          type: boolean
+          nullable: true
+        GoogleUserId:
+          type: string
+          nullable: true
+        FacebookUserId:
+          type: string
+          nullable: true
+        AuthToken:
+          type: string
+          nullable: true
+        CurrentCompanyID:
+          type: integer
+          nullable: true
+        GympassID:
+          type: string
+          nullable: true
+        PermanentTokenTG:
+          type: string
+          nullable: true
+
+    WebUserMeResponse:
+      allOf:
+        - $ref: '#/components/schemas/PortalEnvelope'
+        - type: object
+          properties:
+            Item:
+              $ref: '#/components/schemas/WebUserMeItem'
+
+    UserStatusNode:
+      type: object
+      properties:
+        Text:
+          type: string
+          example: Documento Informativo
+        Contents:
+          type: array
+          items:
+            $ref: '#/components/schemas/UserStatusNode'
+
+    UserMyStatusResponse:
+      allOf:
+        - $ref: '#/components/schemas/PortalEnvelope'
+        - type: object
+          properties:
+            Item:
+              $ref: '#/components/schemas/UserStatusNode'
+
+    EPurseMovementItem:
+      type: object
+      properties:
+        EPurseName:
+          type: string
+          example: BORSELLINO GENERALE
+        Cause:
+          type: string
+          example: "PRENOTAZIONE OMAGGIO: PILATES del 17/12/2026 19:00:00"
+        MovementDateTime:
+          type: string
+          example: "2026-11-28T07:01:06"
+        Amount:
+          type: number
+          example: 0.0
+        GiftAmount:
+          type: number
+          example: 0.0
+        ResidualAmount:
+          type: number
+          example: 0.0
+        Balance:
+          type: number
+          example: 0.0
+        ServiceType:
+          type: string
+          example: P
+        IsPoints:
+          type: boolean
+        PointValue:
+          type: number
+          nullable: true
+
+    EPurseMovementsResponse:
+      allOf:
+        - $ref: '#/components/schemas/PortalEnvelope'
+        - type: object
+          properties:
+            Items:
+              type: array
+              items:
+                $ref: '#/components/schemas/EPurseMovementItem'
+
+    EPurseItem:
+      type: object
+      properties:
+        UserEPurseID:
+          type: integer
+          example: 20919
+        Code:
+          type: string
+          example: "1-20919"
+        Description:
+          type: string
+          example: BORSELLINO GENERALE
+        EPurseID:
+          type: integer
+          example: 1
+        Balance:
+          type: number
+          example: 0.0
+        ExpireDate:
+          type: string
+          nullable: true
+        IsPoints:
+          type: boolean
+        PointValue:
+          type: number
+          nullable: true
+
+    MyEPursesResponse:
+      allOf:
+        - $ref: '#/components/schemas/PortalEnvelope'
+        - type: object
+          properties:
+            Items:
+              type: array
+              items:
+                $ref: '#/components/schemas/EPurseItem'
 
 paths:
   /security/webauthenticate:
@@ -464,3 +713,91 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PortalEnvelope'
+
+  /webuser/me:
+    get:
+      tags: [WebUser]
+      summary: Retrieve the authenticated user's profile
+      description: >
+        Returns the personal profile and account flags for the currently authenticated user.
+        Documented for reference; not currently consumed by `gymClient.ts`.
+      security:
+        - GymAuthToken: []
+      parameters:
+        - $ref: '#/components/parameters/AppTokenHeader'
+        - $ref: '#/components/parameters/IyesUrlHeader'
+      responses:
+        '200':
+          description: User profile envelope
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebUserMeResponse'
+
+  /user/mystatus:
+    get:
+      tags: [User]
+      summary: Retrieve the authenticated user's informational status tree
+      description: >
+        Returns a hierarchical text tree (`Documento Informativo`) containing user summary
+        sections such as active registrations and bookings (`ISCRIZIONI E PRENOTAZIONI`).
+        Documented for reference; not currently consumed by `gymClient.ts`.
+      security:
+        - GymAuthToken: []
+      parameters:
+        - $ref: '#/components/parameters/AppTokenHeader'
+        - $ref: '#/components/parameters/IyesUrlHeader'
+      responses:
+        '200':
+          description: User status tree envelope
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserMyStatusResponse'
+
+  /webepurse/movements:
+    get:
+      tags: [WebEPurse]
+      summary: List movements for a user's electronic purse
+      description: >
+        Returns movement history for the given `userEPurseID`.
+        Documented for reference; not currently consumed by `gymClient.ts`.
+      security:
+        - GymAuthToken: []
+      parameters:
+        - $ref: '#/components/parameters/AppTokenHeader'
+        - $ref: '#/components/parameters/IyesUrlHeader'
+        - name: userEPurseID
+          in: query
+          required: true
+          schema:
+            type: integer
+            example: 20919
+      responses:
+        '200':
+          description: Electronic purse movements envelope
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EPurseMovementsResponse'
+
+  /webepurse/myepurses:
+    get:
+      tags: [WebEPurse]
+      summary: List electronic purses for the authenticated user
+      description: >
+        Returns the user's electronic purses, including `UserEPurseID`, current `Balance`,
+        and optional `ExpireDate`.
+        Documented for reference; not currently consumed by `gymClient.ts`.
+      security:
+        - GymAuthToken: []
+      parameters:
+        - $ref: '#/components/parameters/AppTokenHeader'
+        - $ref: '#/components/parameters/IyesUrlHeader'
+      responses:
+        '200':
+          description: Electronic purses envelope
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MyEPursesResponse'
