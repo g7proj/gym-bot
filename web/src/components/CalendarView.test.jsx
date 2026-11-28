@@ -1,5 +1,6 @@
-import React, { act } from 'react';
+import { act } from 'react';
 import { createRoot } from 'react-dom/client';
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import CalendarView from './CalendarView';
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
@@ -96,10 +97,10 @@ describe('CalendarView', () => {
           meta={{ startDate: '2026-05-01', endDate: '2026-05-31' }}
           myBookings={[]}
           selectedDate="2026-05-20"
-          onSelectDate={jest.fn()}
-          onRefresh={jest.fn()}
-          onBook={jest.fn()}
-          onCancel={jest.fn()}
+          onSelectDate={vi.fn()}
+          onRefresh={vi.fn()}
+          onBook={vi.fn()}
+          onCancel={vi.fn()}
         />,
       );
     });
@@ -109,9 +110,9 @@ describe('CalendarView', () => {
   });
 
   test('merges myBookings, displays waitlist/booked badges, and filters My bookings', () => {
-    const onSelectDate = jest.fn();
-    const onBook = jest.fn();
-    const onCancel = jest.fn();
+    const onSelectDate = vi.fn();
+    const onBook = vi.fn();
+    const onCancel = vi.fn();
 
     act(() => {
       root.render(
@@ -121,7 +122,7 @@ describe('CalendarView', () => {
           myBookings={sampleMyBookings}
           selectedDate="2026-05-20"
           onSelectDate={onSelectDate}
-          onRefresh={jest.fn()}
+          onRefresh={vi.fn()}
           onBook={onBook}
           onCancel={onCancel}
         />,
@@ -214,10 +215,10 @@ describe('CalendarView', () => {
           meta={{ startDate: '2026-05-01', endDate: '2026-05-31' }}
           myBookings={bookingsAfterCancel}
           selectedDate="2026-05-14"
-          onSelectDate={jest.fn()}
-          onRefresh={jest.fn()}
-          onBook={jest.fn()}
-          onCancel={jest.fn()}
+          onSelectDate={vi.fn()}
+          onRefresh={vi.fn()}
+          onBook={vi.fn()}
+          onCancel={vi.fn()}
         />,
       );
     });
@@ -238,7 +239,7 @@ describe('CalendarView', () => {
   });
 
   test('renders one month grid at a time and switches months cleanly', () => {
-    const onSelectDate = jest.fn();
+    const onSelectDate = vi.fn();
 
     act(() => {
       root.render(
@@ -248,9 +249,9 @@ describe('CalendarView', () => {
           myBookings={[]}
           selectedDate="2026-05-20"
           onSelectDate={onSelectDate}
-          onRefresh={jest.fn()}
-          onBook={jest.fn()}
-          onCancel={jest.fn()}
+          onRefresh={vi.fn()}
+          onBook={vi.fn()}
+          onCancel={vi.fn()}
         />,
       );
     });
@@ -278,7 +279,7 @@ describe('CalendarView', () => {
   });
 
   test('renders disabled Closed button when lesson has isLocked = 1', () => {
-    const onBook = jest.fn();
+    const onBook = vi.fn();
     const lockedDays = [
       {
         date: '2026-05-20',
@@ -306,10 +307,10 @@ describe('CalendarView', () => {
           meta={{ startDate: '2026-05-01', endDate: '2026-05-31' }}
           myBookings={[]}
           selectedDate="2026-05-20"
-          onSelectDate={jest.fn()}
-          onRefresh={jest.fn()}
+          onSelectDate={vi.fn()}
+          onRefresh={vi.fn()}
           onBook={onBook}
-          onCancel={jest.fn()}
+          onCancel={vi.fn()}
         />,
       );
     });

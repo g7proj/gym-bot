@@ -30,7 +30,7 @@ jobs:
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
           cache: "npm"
           cache-dependency-path: web/package-lock.json
 
@@ -38,16 +38,17 @@ jobs:
         working-directory: web
         run: npm install --no-audit --no-fund
 
+      - name: Lint frontend
+        working-directory: web
+        run: npm run lint
+
       - name: Run frontend unit tests
         working-directory: web
-        env:
-          CI: true
-        run: npm test -- --watchAll=false
+        run: npm test
 
       - name: Build React application
         working-directory: web
         env:
-          CI: true
-          REACT_APP_SUPABASE_URL: https://example.supabase.co
-          REACT_APP_SUPABASE_ANON_KEY: example-anon-key
+          VITE_SUPABASE_URL: https://example.supabase.co
+          VITE_SUPABASE_ANON_KEY: example-anon-key
         run: npm run build

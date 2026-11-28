@@ -4,16 +4,16 @@ This folder follows a simple, scalable React layout. The goal is to keep UI, dat
 
 ## Folders
 
-- `components/` – Reusable UI building blocks and view components.
-- `constants/` – Shared labels and static values used by the UI.
-- `services/` – Supabase client setup, auth helpers, and edge-function calls.
-- `utils/` – Pure helper functions (formatters and small data utilities).
+- `components/` â€“ Reusable UI building blocks and view components.
+- `constants/` â€“ Shared labels and static values used by the UI.
+- `services/` â€“ Supabase client setup, auth helpers, and edge-function calls.
+- `utils/` â€“ Pure helper functions (formatters and small data utilities).
 
 ## Entry Points
 
-- `App.js` – Application state and orchestration (data loading, routing between tabs, and top-level layout).
-- `index.js` – React bootstrapping and global styles.
-- `index.css` – Tailwind/global styling.
+- `App.jsx` â€“ Application state and orchestration (data loading, routing between tabs, and top-level layout).
+- `main.jsx` â€“ React 19 bootstrapping and global styles.
+- `index.css` â€“ Tailwind CSS v4 theme tokens and global styling.
 
 ## Data Flow (High Level)
 

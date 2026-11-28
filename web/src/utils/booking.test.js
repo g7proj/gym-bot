@@ -1,3 +1,4 @@
+import { describe, expect, test } from 'vitest';
 import { bookingKey, lessonOccurrenceKey } from './booking';
 
 describe('bookingKey', () => {

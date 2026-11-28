@@ -1,3 +1,4 @@
+import { beforeEach, describe, expect, test } from 'vitest';
 import { applyTheme, getInitialTheme } from './theme';
 
 describe('theme utilities', () => {
