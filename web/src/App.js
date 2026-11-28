@@ -38,6 +38,7 @@ function App() {
   const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
   const [passwordSuccess, setPasswordSuccess] = useState('');
   const selectedByUserRef = useRef(false);
+  const loginInProgressRef = useRef(false);
 
   const isBusy = pendingCount > 0;
 
@@ -89,10 +90,13 @@ function App() {
           setBookingRuns([]);
           return;
         }
-        const { data: prefRows, error: prefError } = await supabase
-          .from('preferences')
-          .select('weekday, course, lesson_start_time')
-          .eq('user_id', id);
+        const [{ data: prefRows, error: prefError }] = await Promise.all([
+          supabase
+            .from('preferences')
+            .select('weekday, course, lesson_start_time')
+            .eq('user_id', id),
+          loadBookingRuns(id),
+        ]);
         if (prefError) {
           throw prefError;
         }
@@ -110,7 +114,6 @@ function App() {
           credentials: { username: userRow?.username || '' },
           preferences: { by_day: byDay },
         });
-        await loadBookingRuns(id);
       } catch (_err) {
         setError('Failed to load user data');
       }
@@ -132,6 +135,7 @@ function App() {
   const handleLogin = async (username, password) => {
     setLoading(true);
     setError('');
+    loginInProgressRef.current = true;
     try {
       await runWithPending(async () => {
         // Step 1: Supabase Auth
@@ -154,8 +158,7 @@ function App() {
         // Step 3: load user profile from public.users
         const currentUserId = data?.user_id || session.user.id;
         setSessionUserId(currentUserId);
-        await loadUser(currentUserId);
-        await loadCourses();
+        await Promise.all([loadUser(currentUserId), loadCourses()]);
         selectedByUserRef.current = false;
         setSelectedDate(getTodayIsoLocal());
         setActiveTab('calendar');
@@ -173,6 +176,7 @@ function App() {
         setError(message || 'Login failed');
       }
     } finally {
+      loginInProgressRef.current = false;
       setLoading(false);
     }
   };
@@ -259,8 +263,7 @@ function App() {
       try {
         await bookLesson(item);
         setNotice({ type: 'success', message: 'Booking request sent.' });
-        await loadCalendar();
-        await loadMyBookings();
+        await Promise.all([loadCalendar(), loadMyBookings()]);
       } catch (err) {
         setNotice({ type: 'error', message: err?.message || 'Booking failed.' });
       }
@@ -272,8 +275,7 @@ function App() {
       try {
         await cancelLesson(item);
         setNotice({ type: 'success', message: 'Booking removed.' });
-        await loadCalendar();
-        await loadMyBookings();
+        await Promise.all([loadCalendar(), loadMyBookings()]);
       } catch (err) {
         setNotice({ type: 'error', message: err?.message || 'Unable to cancel booking.' });
       }
@@ -281,8 +283,7 @@ function App() {
   };
 
   const refreshCalendar = async () => {
-    await loadCalendar();
-    await loadMyBookings();
+    await Promise.all([loadCalendar(), loadMyBookings()]);
   };
 
   const updatePreferences = async (preferences) => {
@@ -375,8 +376,7 @@ function App() {
           }
         }
 
-        await loadUser(targetUserId);
-        await loadCourses();
+        await Promise.all([loadUser(targetUserId), loadCourses()]);
         setNotice({ type: 'success', message: 'Preferences updated.' });
       });
     } catch (_err) {
@@ -424,22 +424,34 @@ function App() {
         setError('Unable to start session.');
       }
     });
-    const { data: subscription } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (isMounted) {
-        const userId = session?.user?.id || null;
-        setSessionUserId(userId);
-        if (userId) {
-          loadUser(userId).catch(() => {});
-        } else {
-          setUser(null);
-          setCoursesByDay({});
-          setCalendarDays([]);
-          setCalendarMeta({ startDate: null, endDate: null });
-          setBookingRuns([]);
-          selectedByUserRef.current = false;
-          setSelectedDate(getTodayIsoLocal());
-        }
+    const { data: subscription } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!isMounted) return;
+      const userId = session?.user?.id || null;
+      setSessionUserId(userId);
+
+      if (!userId) {
+        setUser(null);
+        setCoursesByDay({});
+        setCalendarDays([]);
+        setCalendarMeta({ startDate: null, endDate: null });
+        setMyBookings([]);
+        setBookingRuns([]);
+        selectedByUserRef.current = false;
+        setSelectedDate(getTodayIsoLocal());
+        return;
       }
+
+      // Skip duplicate startup load (handled by initSession), background token refreshes,
+      // and intermediate SIGNED_IN events while handleLogin is still running gym-login.
+      if (
+        event === 'INITIAL_SESSION'
+        || event === 'TOKEN_REFRESHED'
+        || loginInProgressRef.current
+      ) {
+        return;
+      }
+
+      loadUser(userId).catch(() => {});
     });
     return () => {
       isMounted = false;

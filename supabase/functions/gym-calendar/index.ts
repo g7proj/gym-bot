@@ -4,16 +4,7 @@ import { requireAuth } from '../_shared/auth.ts';
 import { listWithMine } from '../_shared/gymClient.ts';
 import { UserCredentialsNotFoundError, withGymSession } from '../_shared/gymSession.ts';
 import { getCorsHeaders, handleOptions } from '../_shared/http.ts';
-import { formatLocalIsoSeconds, getDailyTimeWindow } from '../_shared/schedule.ts';
-
-// Build a date range: current month + next month for calendar view.
-function getMonthRange(timeZone: string): { start: Date; end: Date; currentEnd: Date } {
-  const now = new Date(new Date().toLocaleString('en-US', { timeZone }));
-  const start = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
-  const currentEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 0);
-  const end = new Date(now.getFullYear(), now.getMonth() + 2, 0, 23, 59, 59, 0);
-  return { start, end, currentEnd };
-}
+import { getCalendarMonthWindowStrings } from '../_shared/schedule.ts';
 
 // Return a calendar-like list of bookable classes grouped by date.
 serve(async (req) => {
@@ -37,8 +28,7 @@ serve(async (req) => {
     });
 
     const timeZone = Deno.env.get('APP_TIMEZONE') || 'Europe/Rome';
-    const range = getMonthRange(timeZone);
-    const daily = getDailyTimeWindow(range.start, timeZone);
+    const windowStrings = getCalendarMonthWindowStrings(timeZone);
 
     const response = await withGymSession(
       supabaseAdmin,
@@ -46,10 +36,10 @@ serve(async (req) => {
       (gymToken) =>
         listWithMine(
           gymToken,
-          formatLocalIsoSeconds(range.start),
-          formatLocalIsoSeconds(range.end),
-          formatLocalIsoSeconds(daily.start),
-          formatLocalIsoSeconds(daily.end),
+          windowStrings.startIso,
+          windowStrings.endIso,
+          windowStrings.timeStartIso,
+          windowStrings.timeEndIso,
         ),
       { idempotent: true },
     );
@@ -103,14 +93,15 @@ serve(async (req) => {
       }));
 
     // Extend end_date if the API returns dates beyond the current month.
-    let endDate = formatLocalIsoSeconds(range.currentEnd).slice(0, 10);
+    let endDate = windowStrings.currentMonthEndDate;
     if (maxDate) {
-      const currentEndStr = formatLocalIsoSeconds(range.currentEnd).slice(0, 10);
-      endDate = maxDate > currentEndStr ? maxDate : currentEndStr;
+      endDate = maxDate > windowStrings.currentMonthEndDate
+        ? maxDate
+        : windowStrings.currentMonthEndDate;
     }
 
     return new Response(JSON.stringify({
-      start_date: formatLocalIsoSeconds(range.start).slice(0, 10),
+      start_date: windowStrings.startDate,
       end_date: endDate,
       days,
     }), {
