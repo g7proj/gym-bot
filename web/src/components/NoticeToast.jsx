@@ -1,11 +1,14 @@
-import { NOTICE_COLORS } from '../constants/calendar';
+import { NOTICE_STYLES } from '../constants/calendar';
 
-// Toast message with semantic color mapping.
+// Compact floating toast anchored above the mobile safe-area inset.
 export default function NoticeToast({ notice }) {
   if (!notice) return null;
+  const styleClass = NOTICE_STYLES[notice.type] || NOTICE_STYLES.info;
   return (
     <div
-      className={`fixed bottom-4 left-1/2 z-50 -translate-x-1/2 text-white px-4 py-2 rounded-md shadow-lg ${NOTICE_COLORS[notice.type]}`}
+      role="status"
+      aria-live="polite"
+      className={`fixed bottom-4 left-1/2 z-50 max-w-[calc(100vw-2rem)] -translate-x-1/2 rounded-full border px-4 py-1.5 text-xs font-semibold shadow-lg ${styleClass}`}
     >
       {notice.message}
     </div>

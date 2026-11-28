@@ -1,9 +1,9 @@
 export default function LoadingOverlay() {
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center bg-white/70 backdrop-blur-sm">
-      <div className="flex flex-col items-center gap-3 rounded-md border border-slate-200 bg-white px-6 py-4 shadow-lg">
-        <div className="h-10 w-10 animate-spin rounded-md border-4 border-slate-200 border-t-slate-900" />
-        <div className="text-sm font-medium text-slate-700">Loading...</div>
+    <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-950/20 backdrop-blur-[2px] dark:bg-slate-950/50">
+      <div className="flex items-center gap-2.5 rounded-full border border-slate-200 bg-white px-4 py-2 shadow-lg dark:border-slate-800 dark:bg-slate-900">
+        <div className="h-4 w-4 animate-spin rounded-full border-2 border-slate-300 border-t-brand dark:border-slate-700 dark:border-t-brand-light" />
+        <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">Syncing...</span>
       </div>
     </div>
   );

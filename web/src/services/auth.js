@@ -71,3 +71,16 @@ export async function signInOrSignUp(username, password) {
   }
   return retryData.session;
 }
+
+// Refresh the local Supabase session after an in-app password change.
+export async function reauthenticateUser(username, password) {
+  const email = usernameToEmail(username);
+  const { data, error } = await supabase.auth.signInWithPassword({
+    email,
+    password,
+  });
+  if (error) {
+    throw error;
+  }
+  return data.session;
+}
