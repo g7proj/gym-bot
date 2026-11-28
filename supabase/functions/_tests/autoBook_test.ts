@@ -1,3 +1,4 @@
+// deno-lint-ignore-file require-await
 /**
  * Deno unit tests for `_shared/autoBook.ts` and `_shared/schedule.ts`.
  * Zero external imports so `deno test` executes completely offline.

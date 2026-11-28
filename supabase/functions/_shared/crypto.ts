@@ -22,7 +22,7 @@ function base64ToBytes(base64: string): Uint8Array<ArrayBuffer> {
 }
 
 // Load and validate the AES key from env (must be 32 bytes for AES-256-GCM).
-async function getKey(): Promise<CryptoKey> {
+function getKey(): Promise<CryptoKey> {
   const keyBase64 = Deno.env.get('ENCRYPTION_KEY');
   if (!keyBase64) {
     throw new Error('ENCRYPTION_KEY secret is not configured');

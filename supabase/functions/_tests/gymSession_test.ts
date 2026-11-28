@@ -1,3 +1,4 @@
+// deno-lint-ignore-file require-await
 /**
  * Deno unit tests for `_shared/crypto.ts` and `_shared/gymSession.ts`.
  * Zero external imports so `deno test` executes completely offline in CI and sandboxes.
@@ -20,7 +21,7 @@ function assertEquals<T>(actual: T, expected: T, message?: string): void {
 
 async function assertRejects(
   fn: () => Promise<unknown>,
-  expectedType?: new (...args: any[]) => Error,
+  expectedType?: new (...args: never[]) => Error,
   messageSubstring?: string,
 ): Promise<void> {
   let caught: unknown = null;

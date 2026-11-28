@@ -1,9 +1,7 @@
-﻿import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { requireAuth } from '../_shared/auth.ts';
+﻿import { createSupabaseAdmin, requireAuth } from '../_shared/auth.ts';
 import { listWithMine } from '../_shared/gymClient.ts';
 import { UserCredentialsNotFoundError, withGymSession } from '../_shared/gymSession.ts';
-import { getCorsHeaders, handleOptions } from '../_shared/http.ts';
+import { getCorsHeaders, handleOptions, jsonResponse } from '../_shared/http.ts';
 import {
   formatApiTime,
   getUpcomingRollingWindowStrings,
@@ -23,7 +21,7 @@ type LessonSlot = {
 };
 
 // Return distinct lesson slots grouped by weekday for the next rolling week.
-serve(async (req) => {
+Deno.serve(async (req: Request) => {
   const corsHeaders = getCorsHeaders(req);
   if (req.method === 'OPTIONS') {
     return handleOptions(corsHeaders);
@@ -34,14 +32,12 @@ serve(async (req) => {
     const supabaseServiceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
 
     const authResult = await requireAuth(req, supabaseUrl, supabaseServiceRoleKey, corsHeaders);
-    if (authResult.errorResponse) {
-      return authResult.errorResponse;
+    if (authResult.errorResponse || !authResult.user) {
+      return authResult.errorResponse!;
     }
     const user = authResult.user;
 
-    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceRoleKey, {
-      auth: { autoRefreshToken: false, persistSession: false },
-    });
+    const supabaseAdmin = createSupabaseAdmin(supabaseUrl, supabaseServiceRoleKey);
 
     const timeZone = Deno.env.get('APP_TIMEZONE') || 'Europe/Rome';
     // Fetch a 14-day rolling window starting tomorrow so single-day holidays never hide a weekday's slots.
@@ -61,18 +57,20 @@ serve(async (req) => {
       { idempotent: true },
     );
 
-    const items = Array.isArray(response?.Items) ? response.Items : [];
+    const items = Array.isArray(response?.Items)
+      ? (response.Items as Record<string, unknown>[])
+      : [];
     const byDay: Record<string, LessonSlot[]> = {};
     const seen = new Set<string>();
 
-    items.forEach((item: any) => {
+    items.forEach((item) => {
       const category = String(item?.CategoryDescription || '').trim();
       if (category !== 'CORSI FIT') return;
 
       const dateLessonStr = String(item?.DateLesson || '').trim();
       const serviceDesc = String(item?.ServiceDescription || '').trim();
-      const startTime = formatApiTime(item?.StartTime);
-      const endTime = formatApiTime(item?.EndTime);
+      const startTime = formatApiTime(String(item?.StartTime || ''));
+      const endTime = formatApiTime(String(item?.EndTime || ''));
       if (!dateLessonStr || !serviceDesc || !startTime || !endTime) return;
 
       const dateKey = dateLessonStr.slice(0, 10);
@@ -107,21 +105,12 @@ serve(async (req) => {
       });
     });
 
-    return new Response(JSON.stringify({ by_day: byDay }), {
-      status: 200,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
+    return jsonResponse({ by_day: byDay }, 200, corsHeaders);
   } catch (err: unknown) {
     if (err instanceof UserCredentialsNotFoundError) {
-      return new Response(JSON.stringify({ error: 'User credentials not found' }), {
-        status: 404,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      return jsonResponse({ error: 'User credentials not found' }, 404, corsHeaders);
     }
     const message = err instanceof Error ? err.message : 'Unexpected error';
-    return new Response(JSON.stringify({ error: message }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
+    return jsonResponse({ error: message }, 500, corsHeaders);
   }
 });

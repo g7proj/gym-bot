@@ -9,6 +9,8 @@
  * - Never leak `TELEGRAM_BOT_TOKEN` or sensitive URLs in thrown errors or messages.
  */
 
+import type { SupabaseAdminLike } from './gymSession.ts';
+
 const TELEGRAM_API_BASE = 'https://api.telegram.org';
 const TELEGRAM_TIMEOUT_MS = 5000;
 const LINK_TOKEN_PATTERN = /^[A-Za-z0-9_-]{16,64}$/;
@@ -242,12 +244,32 @@ export interface WebhookDeps {
   sendMessageFn?: (botToken: string, chatId: string, htmlText: string) => Promise<boolean>;
 }
 
+export interface TelegramChat {
+  id?: number | string;
+  type?: string;
+}
+
+export interface TelegramFrom {
+  username?: string;
+  first_name?: string;
+}
+
+export interface TelegramMessage {
+  chat?: TelegramChat;
+  from?: TelegramFrom;
+  text?: string;
+}
+
+export interface TelegramUpdate {
+  message?: TelegramMessage;
+}
+
 /**
  * Process an incoming Telegram webhook update (`/start <token>`, `/start`, `/stop`).
  */
 export async function processTelegramWebhookUpdate(
-  supabaseAdmin: any,
-  update: Record<string, any>,
+  supabaseAdmin: SupabaseAdminLike,
+  update: TelegramUpdate,
   botToken: string,
   deps: WebhookDeps = {},
 ): Promise<{ action: string }> {

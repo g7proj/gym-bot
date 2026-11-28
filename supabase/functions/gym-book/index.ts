@@ -1,12 +1,10 @@
-import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { requireAuth } from '../_shared/auth.ts';
+import { createSupabaseAdmin, requireAuth } from '../_shared/auth.ts';
 import { addWait, bookLesson } from '../_shared/gymClient.ts';
 import { UserCredentialsNotFoundError, withGymSession } from '../_shared/gymSession.ts';
-import { getCorsHeaders, handleOptions } from '../_shared/http.ts';
+import { getCorsHeaders, handleOptions, jsonResponse } from '../_shared/http.ts';
 
 // Book a class or place the user on the waitlist depending on seat availability.
-serve(async (req) => {
+Deno.serve(async (req: Request) => {
   const corsHeaders = getCorsHeaders(req);
   if (req.method === 'OPTIONS') {
     return handleOptions(corsHeaders);
@@ -17,8 +15,8 @@ serve(async (req) => {
     const supabaseServiceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
 
     const authResult = await requireAuth(req, supabaseUrl, supabaseServiceRoleKey, corsHeaders);
-    if (authResult.errorResponse) {
-      return authResult.errorResponse;
+    if (authResult.errorResponse || !authResult.user) {
+      return authResult.errorResponse!;
     }
     const user = authResult.user;
 
@@ -28,16 +26,15 @@ serve(async (req) => {
     const date = String(body?.date || '').trim();
     const startTimeRaw = String(body?.startTime || '').trim();
     const endTimeRaw = String(body?.endTime || '').trim();
-    // Accept either full ISO timestamps or date + time fragments.
-    const startTime =
-      startTimeRaw.includes('T')
-        ? startTimeRaw
-        : (date ? `${date}T${startTimeRaw}:00` : startTimeRaw);
 
-    const endTime =
-      endTimeRaw.includes('T')
-        ? endTimeRaw
-        : (date ? `${date}T${endTimeRaw}:00` : endTimeRaw);
+    // Accept either full ISO timestamps or date + time fragments.
+    const startTime = startTimeRaw.includes('T')
+      ? startTimeRaw
+      : (date ? `${date}T${startTimeRaw}:00` : startTimeRaw);
+    const endTime = endTimeRaw.includes('T')
+      ? endTimeRaw
+      : (date ? `${date}T${endTimeRaw}:00` : endTimeRaw);
+
     const type = Number.isFinite(body?.type) ? Number(body.type) : 0;
     const idDurata = Number.isFinite(body?.idDurata) ? Number(body.idDurata) : 0;
     const bookNr = Number.isFinite(body?.bookNr) ? Number(body.bookNr) : 0;
@@ -46,18 +43,12 @@ serve(async (req) => {
     const isUserPresent = Boolean(body?.isUserPresent);
 
     if (!idService || !idLesson || !startTime || !endTime) {
-      return new Response(JSON.stringify({ error: 'Missing booking fields' }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      return jsonResponse({ error: 'Missing booking fields' }, 400, corsHeaders);
     }
 
     // Avoid duplicate bookings or waitlist entries from the UI.
     if (isUserPresent || waitingListPosition > 0) {
-      return new Response(JSON.stringify({ error: 'Already booked or in waiting list' }), {
-        status: 409,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      return jsonResponse({ error: 'Already booked or in waiting list' }, 409, corsHeaders);
     }
 
     const payload = {
@@ -71,9 +62,7 @@ serve(async (req) => {
       IDDurata: idDurata,
     };
 
-    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceRoleKey, {
-      auth: { autoRefreshToken: false, persistSession: false },
-    });
+    const supabaseAdmin = createSupabaseAdmin(supabaseUrl, supabaseServiceRoleKey);
 
     // If no slots are available, fall back to waitlist.
     const response = await withGymSession(
@@ -83,20 +72,12 @@ serve(async (req) => {
       { idempotent: false },
     );
 
-    return new Response(JSON.stringify({ success: true, response }), {
-      status: 200,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
-  } catch (err) {
+    return jsonResponse({ success: true, response }, 200, corsHeaders);
+  } catch (err: unknown) {
     if (err instanceof UserCredentialsNotFoundError) {
-      return new Response(JSON.stringify({ error: 'User credentials not found' }), {
-        status: 404,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      return jsonResponse({ error: 'User credentials not found' }, 404, corsHeaders);
     }
-    return new Response(JSON.stringify({ error: err?.message || 'Unexpected error' }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
+    const message = err instanceof Error ? err.message : 'Unexpected error';
+    return jsonResponse({ error: message }, 500, corsHeaders);
   }
 });

@@ -10,7 +10,7 @@
  * - Safe `dryRun` mode that never calls `bookLesson` and never mutates `booking_daily_lock`
  */
 import { bookLesson, listWithMine } from './gymClient.ts';
-import { withGymSession } from './gymSession.ts';
+import { type SupabaseAdminLike, withGymSession } from './gymSession.ts';
 import { formatApiTime, getBookingWindowStrings, getZonedParts } from './schedule.ts';
 import { formatAutoBookErrorAlert, sendTelegramMessage } from './telegram.ts';
 
@@ -71,8 +71,8 @@ export interface AutoBookDeps {
     endDate: string,
     timeStart: string,
     timeEnd: string,
-  ) => Promise<any>;
-  bookLessonFn?: (token: string, payload: Record<string, unknown>) => Promise<any>;
+  ) => Promise<Record<string, unknown>>;
+  bookLessonFn?: (token: string, payload: Record<string, unknown>) => Promise<Record<string, unknown>>;
   loginFn?: (username: string, password: string) => Promise<string>;
   telegramBotToken?: string;
   sendTelegramFn?: (botToken: string, chatId: string, htmlText: string) => Promise<boolean>;
@@ -173,7 +173,7 @@ async function mapWithConcurrency<T, R>(
 }
 
 async function completeBookingLock(
-  supabaseAdmin: any,
+  supabaseAdmin: SupabaseAdminLike,
   userId: string,
   runDate: string,
   runId: string,
@@ -201,7 +201,7 @@ async function completeBookingLock(
 
 /** Run automated bookings across all registered users. */
 export async function runAutoBooking(
-  supabaseAdmin: any,
+  supabaseAdmin: SupabaseAdminLike,
   deps: AutoBookDeps = {},
 ): Promise<AutoBookSummary> {
   const timeZone = deps.timeZone || Deno.env.get('APP_TIMEZONE') || DEFAULT_TIMEZONE;
@@ -592,8 +592,8 @@ export async function runAutoBooking(
           .select('user_id, chat_id, enabled, last_error_notified_date')
           .in('user_id', failedUserIds);
 
-        const connByUser = new Map<string, Record<string, any>>();
-        for (const row of (tgRows || []) as Record<string, any>[]) {
+        const connByUser = new Map<string, Record<string, unknown>>();
+        for (const row of (tgRows || []) as Record<string, unknown>[]) {
           if (row?.user_id && row?.chat_id && row?.enabled !== false) {
             connByUser.set(String(row.user_id), row);
           }

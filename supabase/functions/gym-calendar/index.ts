@@ -1,13 +1,27 @@
-import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { requireAuth } from '../_shared/auth.ts';
+import { createSupabaseAdmin, requireAuth } from '../_shared/auth.ts';
 import { listWithMine } from '../_shared/gymClient.ts';
 import { UserCredentialsNotFoundError, withGymSession } from '../_shared/gymSession.ts';
-import { getCorsHeaders, handleOptions } from '../_shared/http.ts';
+import { getCorsHeaders, handleOptions, jsonResponse } from '../_shared/http.ts';
 import { getCalendarMonthWindowStrings } from '../_shared/schedule.ts';
 
+interface CalendarEntry {
+  idLesson: unknown;
+  idService: unknown;
+  date: string;
+  startTime: string;
+  endTime: string;
+  service: string;
+  category: string;
+  availablePlaces: number;
+  isUserPresent: boolean;
+  waitingListPosition: number;
+  maxBookings: number;
+  webMaxUser: number;
+  isLocked: number;
+}
+
 // Return a calendar-like list of bookable classes grouped by date.
-serve(async (req) => {
+Deno.serve(async (req: Request) => {
   const corsHeaders = getCorsHeaders(req);
   if (req.method === 'OPTIONS') {
     return handleOptions(corsHeaders);
@@ -18,15 +32,12 @@ serve(async (req) => {
     const supabaseServiceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
 
     const authResult = await requireAuth(req, supabaseUrl, supabaseServiceRoleKey, corsHeaders);
-    if (authResult.errorResponse) {
-      return authResult.errorResponse;
+    if (authResult.errorResponse || !authResult.user) {
+      return authResult.errorResponse!;
     }
     const user = authResult.user;
 
-    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceRoleKey, {
-      auth: { autoRefreshToken: false, persistSession: false },
-    });
-
+    const supabaseAdmin = createSupabaseAdmin(supabaseUrl, supabaseServiceRoleKey);
     const timeZone = Deno.env.get('APP_TIMEZONE') || 'Europe/Rome';
     const windowStrings = getCalendarMonthWindowStrings(timeZone);
 
@@ -44,11 +55,13 @@ serve(async (req) => {
       { idempotent: true },
     );
 
-    const items = Array.isArray(response?.Items) ? response.Items : [];
-    const byDate: Record<string, any[]> = {};
+    const items = Array.isArray(response?.Items)
+      ? (response.Items as Record<string, unknown>[])
+      : [];
+    const byDate: Record<string, CalendarEntry[]> = {};
     let maxDate = '';
 
-    items.forEach((item: any) => {
+    items.forEach((item) => {
       const category = String(item?.CategoryDescription || '').trim();
       // Only return fitness classes, not other booking categories.
       if (category !== 'CORSI FIT') return;
@@ -63,7 +76,7 @@ serve(async (req) => {
       const startTime = String(item?.StartTime || '').slice(11, 16);
       const endTime = String(item?.EndTime || '').slice(11, 16);
 
-      const entry = {
+      const entry: CalendarEntry = {
         idLesson: item?.IDLesson,
         idService: item?.IDServizio,
         date: dateKey,
@@ -100,24 +113,20 @@ serve(async (req) => {
         : windowStrings.currentMonthEndDate;
     }
 
-    return new Response(JSON.stringify({
-      start_date: windowStrings.startDate,
-      end_date: endDate,
-      days,
-    }), {
-      status: 200,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
-  } catch (err) {
+    return jsonResponse(
+      {
+        start_date: windowStrings.startDate,
+        end_date: endDate,
+        days,
+      },
+      200,
+      corsHeaders,
+    );
+  } catch (err: unknown) {
     if (err instanceof UserCredentialsNotFoundError) {
-      return new Response(JSON.stringify({ error: 'User credentials not found' }), {
-        status: 404,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      return jsonResponse({ error: 'User credentials not found' }, 404, corsHeaders);
     }
-    return new Response(JSON.stringify({ error: err?.message || 'Unexpected error' }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
+    const message = err instanceof Error ? err.message : 'Unexpected error';
+    return jsonResponse({ error: message }, 500, corsHeaders);
   }
 });

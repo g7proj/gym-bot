@@ -10,6 +10,13 @@ import { gymLogin } from './gymClient.ts';
 const DEFAULT_TTL_MINUTES = 15;
 const EXPIRY_BUFFER_MS = 30_000;
 
+/**
+ * Structural client alias used by shared modules so offline unit tests can pass lightweight mocks
+ * without importing external npm packages into `_shared/`.
+ */
+// deno-lint-ignore no-explicit-any
+export type SupabaseAdminLike = any;
+
 export class UserCredentialsNotFoundError extends Error {
   constructor(message = 'User credentials not found') {
     super(message);
@@ -63,7 +70,7 @@ export function isAuthSessionError(err: unknown): boolean {
 
 /** Encrypt and persist an InfoYou AuthToken in `public.gym_session_cache` (best-effort). */
 export async function cacheGymToken(
-  supabaseAdmin: any,
+  supabaseAdmin: SupabaseAdminLike,
   userId: string,
   token: string,
   options?: Pick<GymSessionOptions, 'ttlMinutes' | 'now'>,
@@ -88,7 +95,7 @@ export async function cacheGymToken(
 }
 
 /** Remove any cached InfoYou AuthToken for the user (best-effort). */
-export async function invalidateGymToken(supabaseAdmin: any, userId: string): Promise<void> {
+export async function invalidateGymToken(supabaseAdmin: SupabaseAdminLike, userId: string): Promise<void> {
   try {
     await supabaseAdmin.from('gym_session_cache').delete().eq('user_id', userId);
   } catch (_err) {
@@ -97,7 +104,7 @@ export async function invalidateGymToken(supabaseAdmin: any, userId: string): Pr
 }
 
 async function readValidCachedToken(
-  supabaseAdmin: any,
+  supabaseAdmin: SupabaseAdminLike,
   userId: string,
   nowMs: number,
 ): Promise<string | null> {
@@ -128,7 +135,7 @@ async function readValidCachedToken(
  * to decrypting the user's stored password and calling `gymLogin`.
  */
 export async function withGymSession<T>(
-  supabaseAdmin: any,
+  supabaseAdmin: SupabaseAdminLike,
   userId: string,
   operation: (gymToken: string) => Promise<T>,
   options?: GymSessionOptions,

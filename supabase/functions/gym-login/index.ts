@@ -1,13 +1,11 @@
-import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createSupabaseAdmin, requireAuth } from '../_shared/auth.ts';
 import { encryptString } from '../_shared/crypto.ts';
-import { requireAuth } from '../_shared/auth.ts';
 import { gymLogin } from '../_shared/gymClient.ts';
 import { cacheGymToken } from '../_shared/gymSession.ts';
-import { getCorsHeaders, handleOptions } from '../_shared/http.ts';
+import { getCorsHeaders, handleOptions, jsonResponse } from '../_shared/http.ts';
 
 // Validate gym credentials and store them encrypted for the logged-in user.
-serve(async (req) => {
+Deno.serve(async (req: Request) => {
   const corsHeaders = getCorsHeaders(req);
   if (req.method === 'OPTIONS') {
     return handleOptions(corsHeaders);
@@ -18,8 +16,8 @@ serve(async (req) => {
     const supabaseServiceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
 
     const authResult = await requireAuth(req, supabaseUrl, supabaseServiceRoleKey, corsHeaders);
-    if (authResult.errorResponse) {
-      return authResult.errorResponse;
+    if (authResult.errorResponse || !authResult.user) {
+      return authResult.errorResponse!;
     }
     const user = authResult.user;
 
@@ -28,19 +26,14 @@ serve(async (req) => {
     const password = String(body?.password || '');
 
     if (!username || !password) {
-      return new Response(JSON.stringify({ error: 'Missing credentials' }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      return jsonResponse({ error: 'Missing credentials' }, 400, corsHeaders);
     }
 
     // Only persist credentials after a successful gym login.
     const gymToken = await gymLogin(username, password);
     const encrypted = await encryptString(password);
 
-    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceRoleKey, {
-      auth: { autoRefreshToken: false, persistSession: false },
-    });
+    const supabaseAdmin = createSupabaseAdmin(supabaseUrl, supabaseServiceRoleKey);
 
     // Enforce unique username by removing any older account record.
     const { data: existingUser } = await supabaseAdmin
@@ -65,23 +58,15 @@ serve(async (req) => {
     );
 
     if (upsertError) {
-      return new Response(JSON.stringify({ error: upsertError.message }), {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      return jsonResponse({ error: upsertError.message }, 500, corsHeaders);
     }
 
     // Warm the session cache so immediate calendar/courses/mybooks requests skip re-login.
     await cacheGymToken(supabaseAdmin, user.id, gymToken);
 
-    return new Response(JSON.stringify({ user_id: user.id, username }), {
-      status: 200,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
-  } catch (err) {
-    return new Response(JSON.stringify({ error: err?.message || 'Unexpected error' }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
+    return jsonResponse({ user_id: user.id, username }, 200, corsHeaders);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Unexpected error';
+    return jsonResponse({ error: message }, 500, corsHeaders);
   }
 });
