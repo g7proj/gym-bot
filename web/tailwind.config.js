@@ -8,13 +8,13 @@ module.exports = {
     extend: {
       colors: {
         brand: {
-          DEFAULT: '#0d9488',
-          dark: '#0f766e',
-          light: '#14b8a6',
+          DEFAULT: '#4f46e5',
+          dark: '#4338ca',
+          light: '#818cf8',
         },
         accent: {
-          DEFAULT: '#38bdf8',
-          dark: '#0284c7',
+          DEFAULT: '#6366f1',
+          dark: '#4f46e5',
         },
         success: {
           DEFAULT: '#10b981',

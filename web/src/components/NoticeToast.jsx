@@ -8,7 +8,7 @@ export default function NoticeToast({ notice }) {
     <div
       role="status"
       aria-live="polite"
-      className={`fixed bottom-4 left-1/2 z-50 max-w-[calc(100vw-2rem)] -translate-x-1/2 rounded-full border px-4 py-1.5 text-xs font-semibold shadow-lg ${styleClass}`}
+      className={`fixed bottom-4 left-1/2 z-50 max-w-[calc(100vw-2rem)] -translate-x-1/2 rounded-md border px-3.5 py-1.5 text-xs font-semibold shadow-lg ${styleClass}`}
     >
       {notice.message}
     </div>

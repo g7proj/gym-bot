@@ -510,7 +510,7 @@ function App() {
 
       <main className="mx-auto max-w-5xl px-3 pt-3 sm:px-6 sm:pt-5">
         {error && (
-          <div className="mb-3 rounded-xl border border-rose-200 bg-rose-50 px-3.5 py-2.5 text-xs font-medium text-rose-700 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-300">
+          <div className="mb-3 rounded-md border border-rose-200 bg-rose-50 px-3.5 py-2.5 text-xs font-medium text-rose-700 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-300">
             {error}
           </div>
         )}
