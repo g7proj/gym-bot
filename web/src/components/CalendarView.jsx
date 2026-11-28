@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { WEEKDAY_LABELS } from '../constants/calendar';
-import { bookingKey } from '../utils/booking';
+import { bookingKey, lessonOccurrenceKey } from '../utils/booking';
 import { formatDay, formatShortDate, monthLabel, weekdayLabel } from '../utils/date';
 import { formatLocalDate, parseLocalDate } from '../utils/date.js';
 
@@ -21,26 +21,33 @@ export default function CalendarView({
   const groupedDays = useMemo(() => (Array.isArray(days) ? days : []), [days]);
 
   const myBookingsLookup = useMemo(() => {
-    const byLessonId = new Map();
+    const byOccurrence = new Map();
     const byKey = new Map();
     (myBookings || []).forEach((item) => {
-      if (item?.idLesson) {
-        byLessonId.set(Number(item.idLesson), item);
+      const isActive = Boolean(item?.isUserPresent) || Number(item?.waitingListPosition ?? 0) > 0;
+      if (!isActive) return;
+
+      const occurrenceKey = lessonOccurrenceKey(item);
+      if (occurrenceKey) {
+        byOccurrence.set(occurrenceKey, item);
       }
       byKey.set(bookingKey(item), item);
     });
-    return { byLessonId, byKey };
+    return { byOccurrence, byKey };
   }, [myBookings]);
 
   const itemsByDate = useMemo(() => {
     const map = {};
     groupedDays.forEach((day) => {
       map[day.date] = (day.items || []).map((item) => {
-        const match = (item?.idLesson && myBookingsLookup.byLessonId.get(Number(item.idLesson)))
+        const occurrenceKey = lessonOccurrenceKey(item);
+        const match = (occurrenceKey && myBookingsLookup.byOccurrence.get(occurrenceKey))
           || myBookingsLookup.byKey.get(bookingKey(item));
         if (!match) {
           return {
             ...item,
+            bookingId: null,
+            isUserPresent: false,
             waitingListPosition: 0,
           };
         }
@@ -50,7 +57,7 @@ export default function CalendarView({
           idLesson: match.idLesson || item.idLesson,
           type: match.type ?? item.type,
           idDurata: match.idDurata ?? item.idDurata,
-          isUserPresent: match.isUserPresent,
+          isUserPresent: Boolean(match.isUserPresent),
           waitingListPosition: Number(match.waitingListPosition ?? 0),
         };
       });
