@@ -9,7 +9,12 @@ import {
   verifyCronSecret,
 } from '../_shared/autoBook.ts';
 import { encryptString } from '../_shared/crypto.ts';
-import { getBookingWindowStrings, getZonedParts } from '../_shared/schedule.ts';
+import {
+  getBookingWindowStrings,
+  getCalendarMonthWindowStrings,
+  getUpcomingRollingWindowStrings,
+  getZonedParts,
+} from '../_shared/schedule.ts';
 
 function assertEquals<T>(actual: T, expected: T, message?: string): void {
   const a = JSON.stringify(actual);
@@ -165,6 +170,35 @@ Deno.test('schedule: Europe/Rome 20-day booking window and weekday resolution', 
   const zoned = getZonedParts('Europe/Rome', new Date('2026-05-01T05:30:00Z'));
   assertEquals(zoned.isoDate, '2026-05-01');
   assertEquals(zoned.hour, 7);
+});
+
+Deno.test('schedule: calendar month and rolling windows handle year rollover and leap years', () => {
+  // December -> January year rollover
+  const decWindow = getCalendarMonthWindowStrings(
+    'Europe/Rome',
+    new Date('2026-12-15T10:00:00Z'),
+  );
+  assertEquals(decWindow.startDate, '2026-12-01');
+  assertEquals(decWindow.currentMonthEndDate, '2026-12-31');
+  assertEquals(decWindow.endIso, '2027-01-31T23:59:59');
+
+  // Leap year February 2028
+  const febWindow = getCalendarMonthWindowStrings(
+    'Europe/Rome',
+    new Date('2028-02-10T10:00:00Z'),
+  );
+  assertEquals(febWindow.startDate, '2028-02-01');
+  assertEquals(febWindow.currentMonthEndDate, '2028-02-29');
+  assertEquals(febWindow.endIso, '2028-03-31T23:59:59');
+
+  // 14-day rolling window starting tomorrow
+  const rolling = getUpcomingRollingWindowStrings(
+    14,
+    'Europe/Rome',
+    new Date('2026-05-01T10:00:00Z'),
+  );
+  assertEquals(rolling.startIso, '2026-05-02T00:00:00');
+  assertEquals(rolling.endIso, '2026-05-15T23:59:59');
 });
 
 Deno.test('findMatchingLesson: matches exact course name rather than substring', () => {

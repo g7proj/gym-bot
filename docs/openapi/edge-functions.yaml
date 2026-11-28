@@ -567,7 +567,7 @@ paths:
       tags: [Courses]
       summary: List distinct weekly lesson slots
       description: >
-        Fetches `CORSI FIT` classes for a 7-day rolling window starting tomorrow (in `APP_TIMEZONE`,
+        Fetches `CORSI FIT` classes for a 14-day rolling window starting tomorrow (in `APP_TIMEZONE`,
         default `Europe/Rome`) and returns deduplicated lesson slots grouped by weekday.
       security:
         - BearerAuth: []

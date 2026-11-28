@@ -3,10 +3,18 @@ export const WEEKDAY_EN = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday
 
 const DEFAULT_TIMEZONE = 'Europe/Rome';
 
-// Create a Date that represents "now" in the given time zone.
+// Create a Date whose local fields represent "now" in the given IANA time zone.
 function nowInTimeZone(timeZone = DEFAULT_TIMEZONE): Date {
-  const locale = new Date().toLocaleString('en-US', { timeZone });
-  return new Date(locale);
+  const parts = getZonedParts(timeZone);
+  return new Date(
+    parts.year,
+    parts.month - 1,
+    parts.day,
+    parts.hour,
+    parts.minute,
+    parts.second,
+    0,
+  );
 }
 
 // Format a Date into local ISO-like string without timezone offset.
@@ -141,11 +149,75 @@ export function addDaysIso(isoDate: string, days: number): string {
 }
 
 /** Resolve the lowercase English weekday (`monday`..`sunday`) for a `YYYY-MM-DD` date. */
-export function weekdayFromIsoDate(isoDate: string): string {
+export function weekdayFromIsoDate(isoDate: string): string | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(isoDate)) return null;
   const [y, m, d] = isoDate.split('-').map(Number);
-  const utcDay = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+  const utc = new Date(Date.UTC(y, m - 1, d));
+  if (Number.isNaN(utc.getTime())) return null;
+  const utcDay = utc.getUTCDay();
   const mondayIndex = (utcDay + 6) % 7;
-  return WEEKDAY_EN[mondayIndex];
+  return WEEKDAY_EN[mondayIndex] || null;
+}
+
+/**
+ * Build the current-month + next-month window strings for `gym-calendar`
+ * using pure calendar arithmetic in the target IANA time zone.
+ */
+export function getCalendarMonthWindowStrings(
+  timeZone = DEFAULT_TIMEZONE,
+  instant: Date = new Date(),
+): {
+  startDate: string;
+  currentMonthEndDate: string;
+  startIso: string;
+  endIso: string;
+  timeStartIso: string;
+  timeEndIso: string;
+} {
+  const { year, month } = getZonedParts(timeZone, instant);
+  const pad = (n: number) => String(n).padStart(2, '0');
+
+  const startDate = `${year}-${pad(month)}-01`;
+
+  const currentEndUtc = new Date(Date.UTC(year, month, 0));
+  const currentMonthEndDate = `${currentEndUtc.getUTCFullYear()}-${pad(currentEndUtc.getUTCMonth() + 1)}-${pad(currentEndUtc.getUTCDate())}`;
+
+  const nextEndUtc = new Date(Date.UTC(year, month + 1, 0));
+  const nextMonthEndDate = `${nextEndUtc.getUTCFullYear()}-${pad(nextEndUtc.getUTCMonth() + 1)}-${pad(nextEndUtc.getUTCDate())}`;
+
+  return {
+    startDate,
+    currentMonthEndDate,
+    startIso: `${startDate}T00:00:00`,
+    endIso: `${nextMonthEndDate}T23:59:59`,
+    timeStartIso: `${startDate}T07:00:00`,
+    timeEndIso: `${startDate}T23:59:59`,
+  };
+}
+
+/**
+ * Build an upcoming N-day rolling window starting tomorrow in `timeZone` for `gym-courses`.
+ * Defaults to 14 days so single-day holidays do not leave a weekday without courses.
+ */
+export function getUpcomingRollingWindowStrings(
+  days = 14,
+  timeZone = DEFAULT_TIMEZONE,
+  instant: Date = new Date(),
+): {
+  startIso: string;
+  endIso: string;
+  timeStartIso: string;
+  timeEndIso: string;
+} {
+  const { isoDate } = getZonedParts(timeZone, instant);
+  const startDay = addDaysIso(isoDate, 1);
+  const endDay = addDaysIso(startDay, Math.max(1, days) - 1);
+  return {
+    startIso: `${startDay}T00:00:00`,
+    endIso: `${endDay}T23:59:59`,
+    timeStartIso: `${startDay}T07:00:00`,
+    timeEndIso: `${startDay}T23:59:59`,
+  };
 }
 
 /**
@@ -166,6 +238,6 @@ export function getBookingWindowStrings(todayIso: string): {
     timeStart: `${todayIso}T07:00:00`,
     timeEnd: `${todayIso}T23:59:59`,
     targetDate,
-    targetWeekday: weekdayFromIsoDate(targetDate),
+    targetWeekday: weekdayFromIsoDate(targetDate) || 'monday',
   };
 }

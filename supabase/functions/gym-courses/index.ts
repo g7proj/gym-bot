@@ -6,11 +6,8 @@ import { UserCredentialsNotFoundError, withGymSession } from '../_shared/gymSess
 import { getCorsHeaders, handleOptions } from '../_shared/http.ts';
 import {
   formatApiTime,
-  formatLocalIsoSeconds,
-  getDailyTimeWindow,
-  getRollingWeekWindow,
-  parseApiDate,
-  weekdayName,
+  getUpcomingRollingWindowStrings,
+  weekdayFromIsoDate,
 } from '../_shared/schedule.ts';
 
 type LessonSlot = {
@@ -47,12 +44,8 @@ serve(async (req) => {
     });
 
     const timeZone = Deno.env.get('APP_TIMEZONE') || 'Europe/Rome';
-    // Start from tomorrow so users don't see already-started classes.
-    const nowInTz = new Date(new Date().toLocaleString('en-US', { timeZone }));
-    const tomorrow = new Date(nowInTz);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    const rolling = getRollingWeekWindow(7, tomorrow, timeZone);
-    const daily = getDailyTimeWindow(rolling.start, timeZone);
+    // Fetch a 14-day rolling window starting tomorrow so single-day holidays never hide a weekday's slots.
+    const windowStrings = getUpcomingRollingWindowStrings(14, timeZone);
 
     const response = await withGymSession(
       supabaseAdmin,
@@ -60,10 +53,10 @@ serve(async (req) => {
       (gymToken) =>
         listWithMine(
           gymToken,
-          formatLocalIsoSeconds(rolling.start),
-          formatLocalIsoSeconds(rolling.end),
-          formatLocalIsoSeconds(daily.start),
-          formatLocalIsoSeconds(daily.end),
+          windowStrings.startIso,
+          windowStrings.endIso,
+          windowStrings.timeStartIso,
+          windowStrings.timeEndIso,
         ),
       { idempotent: true },
     );
@@ -82,10 +75,8 @@ serve(async (req) => {
       const endTime = formatApiTime(item?.EndTime);
       if (!dateLessonStr || !serviceDesc || !startTime || !endTime) return;
 
-      const parsedDate = parseApiDate(dateLessonStr);
-      if (!parsedDate) return;
-
-      const dayName = weekdayName(parsedDate);
+      const dateKey = dateLessonStr.slice(0, 10);
+      const dayName = weekdayFromIsoDate(dateKey);
       if (!dayName) return;
 
       const normalizedCourse = serviceDesc.toLowerCase();
@@ -98,7 +89,7 @@ serve(async (req) => {
         weekday: dayName,
         course: normalizedCourse,
         course_label: serviceDesc,
-        date: dateLessonStr.slice(0, 10),
+        date: dateKey,
         lesson_start_time: startTime,
         lesson_end_time: endTime,
         id_service: Number(item?.IDServizio ?? 0),
